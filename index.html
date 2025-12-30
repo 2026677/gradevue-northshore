@@ -31,7 +31,7 @@
     
     * {
       margin: 0;
-      padding:  0;
+      padding: 0;
       box-sizing: border-box;
     }
     
@@ -77,7 +77,7 @@
       align-items: center;
       justify-content: center;
       font-size: 24px;
-      font-weight:  800;
+      font-weight: 800;
       color: white;
       box-shadow: 0 8px 20px var(--accent-glow);
     }
@@ -92,7 +92,7 @@
       background-clip: text;
     }
     
-    .badge {
+    . badge {
       padding: 10px 18px;
       border-radius:  999px;
       background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(96, 165, 250, 0.1));
@@ -102,7 +102,7 @@
       font-weight:  600;
       display: flex;
       align-items: center;
-      gap:  8px;
+      gap: 8px;
     }
     
     .badge:: before {
@@ -119,7 +119,7 @@
     /* Cards */
     .card {
       background: var(--card);
-      border: 1px solid var(--border);
+      border:  1px solid var(--border);
       border-radius: 16px;
       box-shadow: var(--shadow-lg);
       margin-bottom: 24px;
@@ -139,8 +139,8 @@
     }
     
     .card-title {
-      font-size: 1.25rem;
-      font-weight: 700;
+      font-size:  1.25rem;
+      font-weight:  700;
       color: var(--text);
       margin-bottom:  6px;
     }
@@ -159,12 +159,12 @@
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
       gap: 20px;
-      margin-bottom: 24px;
+      margin-bottom:  24px;
     }
     
-    . form-group {
-      display:  flex;
-      flex-direction:  column;
+    .form-group {
+      display: flex;
+      flex-direction: column;
     }
     
     label {
@@ -201,10 +201,10 @@
     }
     
     /* Buttons */
-    .button-group {
+    . button-group {
       display: flex;
       gap: 12px;
-      flex-wrap: wrap;
+      flex-wrap:  wrap;
       align-items: center;
     }
     
@@ -280,7 +280,7 @@
       content: '';
       position: absolute;
       top: 0;
-      left:  0;
+      left: 0;
       right: 0;
       height: 4px;
       background: linear-gradient(90deg, var(--accent), var(--accent-2));
@@ -288,7 +288,7 @@
       transition:  opacity 0.2s ease;
     }
     
-    .class-card:hover {
+    . class-card:hover {
       background: var(--card-hover);
       border-color: var(--accent);
       transform: translateY(-4px);
@@ -299,7 +299,7 @@
       opacity: 1;
     }
     
-    .class-header {
+    . class-header {
       margin-bottom: 16px;
     }
     
@@ -311,7 +311,7 @@
       line-height: 1.3;
     }
     
-    .class-meta {
+    . class-meta {
       font-size: 0.9rem;
       color: var(--muted);
       margin-bottom: 12px;
@@ -379,9 +379,9 @@
     
     .assignments-title {
       font-size: 0.9rem;
-      font-weight: 600;
+      font-weight:  600;
       color: var(--text-secondary);
-      margin-bottom:  12px;
+      margin-bottom: 12px;
       text-transform: uppercase;
       letter-spacing: 0.05em;
     }
@@ -393,7 +393,7 @@
       padding: 12px;
       background: var(--bg-secondary);
       border: 1px solid var(--border);
-      border-radius: 10px;
+      border-radius:  10px;
       margin-bottom: 8px;
       transition: all 0.2s ease;
     }
@@ -434,7 +434,7 @@
       border-radius: 12px;
     }
     
-    . hypo-form-title {
+    .hypo-form-title {
       font-size: 0.9rem;
       font-weight: 600;
       color: var(--text-secondary);
@@ -445,10 +445,10 @@
       display: grid;
       grid-template-columns: 2fr 1fr 1fr;
       gap: 10px;
-      margin-bottom:  12px;
+      margin-bottom: 12px;
     }
     
-    .hypo-inputs input {
+    . hypo-inputs input {
       padding: 10px 12px;
       font-size: 0.9rem;
     }
@@ -638,7 +638,7 @@
     const statusEl = document.getElementById("status");
     const classesEl = document.getElementById("classes");
     const loginBtn = document.getElementById("loginBtn");
-    const loadSampleBtn = document. getElementById("loadSampleBtn");
+    const loadSampleBtn = document.getElementById("loadSampleBtn");
 
     function setStatus(msg, icon = '⏳') {
       statusEl.innerHTML = `${icon} ${msg}`;
@@ -666,23 +666,55 @@
       }
       
       const result = await resp.json();
+      console.log('API Response:', result);
+      
+      // The backend now returns raw XML in result.data
       return parseStudentVueXML(result.data);
     }
 
     // ---------- Parse XML ----------
     function parseStudentVueXML(xmlString) {
+      console.log('Parsing XML, length:', xmlString.length);
+      
       const parser = new DOMParser();
       const xmlDoc = parser.parseFromString(xmlString, "text/xml");
       
-      const studentName = xmlDoc.querySelector("StudentInfo")?.getAttribute("StudentName") || "Student";
-      const studentId = xmlDoc.querySelector("StudentInfo")?.getAttribute("StudentNumber") || "";
+      // Check for parse errors
+      const parseError = xmlDoc.querySelector('parsererror');
+      if (parseError) {
+        console.error('XML Parse Error:', parseError.textContent);
+        throw new Error('Invalid XML response');
+      }
       
-      const courses = Array.from(xmlDoc.querySelectorAll("Course")).map(course => {
+      // Log the XML structure
+      console.log('XML Root:', xmlDoc.documentElement.tagName);
+      
+      // Try different selectors for student info
+      let studentName = "Student";
+      let studentId = "";
+      
+      const studentInfo = xmlDoc.querySelector("StudentInfo");
+      if (studentInfo) {
+        studentName = studentInfo.getAttribute("StudentName") || studentName;
+        studentId = studentInfo.getAttribute("StudentNumber") || studentId;
+      }
+      
+      console.log('Student:', studentName, studentId);
+      
+      // Extract courses
+      const courseNodes = xmlDoc.querySelectorAll("Course");
+      console.log('Found courses:', courseNodes.length);
+      
+      const courses = Array.from(courseNodes).map(course => {
         const courseName = course.getAttribute("Title") || "Unknown Course";
         const period = course.getAttribute("Period") || "";
         const teacher = course.getAttribute("Staff") || "";
+        const room = course.getAttribute("Room") || "";
         
-        const marks = course.querySelectorAll("Mark");
+        console.log('Processing course:', courseName);
+        
+        // Get marks (grades)
+        const marks = course. querySelectorAll("Mark");
         let grade = 0;
         let assignments = [];
         
@@ -691,7 +723,12 @@
           const calculatedGrade = currentMark.getAttribute("CalculatedScoreString");
           grade = parseFloat(calculatedGrade) || 0;
           
+          console.log('Grade for', courseName, ':', grade);
+          
+          // Extract assignments
           const assignmentNodes = currentMark.querySelectorAll("Assignment");
+          console.log('Assignments for', courseName, ':', assignmentNodes.length);
+          
           assignments = Array.from(assignmentNodes).map(assign => {
             const points = assign.getAttribute("Points") || "0 / 0";
             const [score, outOf] = points.split(" / ").map(p => parseFloat(p) || 0);
@@ -707,11 +744,14 @@
           name: courseName,
           section: period ?  `Period ${period}` : "N/A",
           teacher,
+          room,
           credits: 1,
           grade:  Math.round(grade),
           assignments
         };
       });
+      
+      console.log('Parsed courses:', courses.length);
       
       return {
         student: { name: studentName, id: studentId },
@@ -722,11 +762,11 @@
     // ---------- Grade helpers ----------
     function computeGrade(assignments) {
       const totals = assignments.reduce((acc, a) => {
-        acc. earned += Number(a.score) || 0;
+        acc.earned += Number(a.score) || 0;
         acc. possible += Number(a.outOf) || 0;
         return acc;
       }, { earned: 0, possible: 0 });
-      return totals.possible ?  Math.round((totals.earned / totals. possible) * 100) : 0;
+      return totals.possible ? Math.round((totals.earned / totals. possible) * 100) : 0;
     }
 
     function getGradeClass(grade) {
@@ -737,7 +777,7 @@
 
     // ---------- Render ----------
     function renderClasses(data) {
-      if (!data || ! data.classes || ! data.classes.length) {
+      if (!data || !data.classes || ! data.classes.length) {
         classesEl.innerHTML = `
           <div class="empty-state">
             <div class="empty-state-icon">📚</div>
@@ -827,7 +867,7 @@
 
       const temp = structuredClone(currentData);
       temp.classes[idx]. assignments.push({ name, score, outOf });
-      temp.classes[idx].grade = computeGrade(temp. classes[idx].assignments);
+      temp.classes[idx].grade = computeGrade(temp.classes[idx].assignments);
 
       renderClasses(temp);
       setStatus(`What-if added to ${temp.classes[idx].name}.  New grade: ${temp.classes[idx].grade}%`, '🧮');
