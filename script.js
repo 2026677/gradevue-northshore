@@ -72,14 +72,10 @@ function parseDate(str) {
   return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}/${d.getFullYear()}`;
 }
 function isGraded(a) {
-  // Not graded if possible points missing or zero, or explicit flag/labels
   if (!a || a.outOf === 0 || a.outOf === null || a.outOf === undefined) return false;
-  const scoreStr = String(a.score ?? '');
-  const measureStr = String(a.name ?? '');
-  return !(scoreStr.toLowerCase().includes('not graded') || measureStr.toLowerCase().includes('not graded'));
+  return true;
 }
 function computeCategoryPerc(assignments) {
-  // Returns map: { category: { earned, possible, pct } } excluding non-graded
   const cat = {};
   for (const a of assignments) {
     if (!isGraded(a)) continue;
@@ -93,29 +89,34 @@ function computeCategoryPerc(assignments) {
   }
   return cat;
 }
+function normalizeWeights(weights) {
+  // weights may be percentages (sum ~100) or fractions (sum ~1)
+  const entries = Object.entries(weights || {}).filter(([, w]) => typeof w === 'number' && w > 0);
+  if (!entries.length) return {};
+  const sum = entries.reduce((acc, [, w]) => acc + w, 0);
+  const denom = sum > 1.001 ? sum : 1; // treat <=1 as already fractional
+  const norm = {};
+  for (const [k, w] of entries) norm[k] = w / denom;
+  return norm;
+}
 function computeWeightedGrade(categoryPerc, weights) {
-  // weights: { category: weightNumber } in percent or fraction
-  let totalWeight = 0;
+  const norm = normalizeWeights(weights);
   let sum = 0;
+  let total = 0;
   for (const k of Object.keys(categoryPerc)) {
-    const w = (weights[k] ?? weights[k.toLowerCase()] ?? 0);
+    const w = norm[k] ?? norm[k?.toLowerCase()] ?? 0;
     const pct = categoryPerc[k].pct;
     if (w > 0 && categoryPerc[k].possible > 0) {
       sum += pct * w;
-      totalWeight += w;
+      total += w;
     }
   }
-  if (!totalWeight) return null; // N/A
-  // If weights are percentages (e.g., 20, 30), normalize
-  if (totalWeight > 1.001) {
-    return sum / totalWeight;
-  }
-  // If weights are fractions (sum ~1), sum already weighted
-  return sum;
+  if (!total) return null;
+  return sum; // already weighted with normalized weights
 }
 
 // ---------- API ----------
-async function fetchGradebook({ studentNumber, password, domain, reportPeriod = '', childInt = '0' }) {
+async function callBackend({ studentNumber, password, domain, reportPeriod = '', childInt = '0' }) {
   const body = { domain, username: studentNumber, password, reportPeriod, childIntID: childInt };
   const resp = await fetch(API_URL, {
     method: 'POST',
@@ -124,17 +125,14 @@ async function fetchGradebook({ studentNumber, password, domain, reportPeriod = 
   });
   if (!resp.ok) {
     const errText = await resp.text();
-    let errMsg = 'Login failed';
+    let errMsg = 'Request failed';
     try {
       const err = JSON.parse(errText);
       errMsg = err.error || err.details || errMsg;
-    } catch {
-      errMsg = errText;
-    }
+    } catch { errMsg = errText; }
     throw new Error(errMsg);
   }
-  const result = await resp.json();
-  return result.data || '';
+  return resp.json(); // { success, data, student, periods }
 }
 
 // ---------- XML Parser ----------
@@ -147,51 +145,33 @@ function parseStudentVueXML(xmlString) {
   const parseError = xmlDoc.querySelector('parsererror');
   if (parseError) throw new Error('Invalid XML response');
 
-  // Student info
-  const studentInfo = xmlDoc.querySelector('StudentInfo');
-  const studentName = studentInfo?.getAttribute('StudentName') || (studentNumberInput.value ? `Student ${studentNumberInput.value}` : 'Student');
-  const studentId = studentInfo?.getAttribute('StudentNumber') || studentNumberInput.value || '';
-  childIntID = studentInfo?.getAttribute('ChildIntID') || childIntID;
-
-  // Report periods list (try multiple structures)
-  const reportPeriods = [];
-  xmlDoc.querySelectorAll('ReportPeriod').forEach(rp => {
-    const name = rp.getAttribute('Name') || rp.textContent || '';
-    if (name) reportPeriods.push(name);
-  });
-  if (reportPeriods.length === 0) {
-    xmlDoc.querySelectorAll('Mark').forEach(m => {
-      const name = m.getAttribute('MarkName') || m.getAttribute('MarkCalc') || '';
-      if (name) reportPeriods.push(name);
-    });
-  }
-  const uniquePeriods = [...new Set(reportPeriods)];
-
   // Courses
   const courseNodes = xmlDoc.querySelectorAll('Course');
   const classes = Array.from(courseNodes).map(course => {
     const name = course.getAttribute('Title') || 'Unknown Course';
     const period = course.getAttribute('Period') || '';
     const teacher = course.getAttribute('Staff') || '';
-    const marks = course.querySelectorAll('Mark');
-    const currentMark = marks.length ? marks[marks.length - 1] : null;
 
-    // Category weights
-    const weights = {};
-    currentMark?.querySelectorAll('AssignmentType, Category').forEach(node => {
-      const typeName = node.getAttribute('Type') || node.getAttribute('Name') || '';
-      const weightRaw = node.getAttribute('Weight') || node.getAttribute('PointsPossibleWeight') || node.textContent || '';
-      const w = parseFloat(String(weightRaw).replace('%','').trim());
-      if (typeName && !isNaN(w)) {
-        weights[typeName] = w;
-      }
-    });
+    // Pick mark: current if flagged, else last
+    const marks = Array.from(course.querySelectorAll('Mark'));
+    let currentMark =
+      marks.find(m => (m.getAttribute('IsCurrent') || m.getAttribute('IsCurrentReportingPeriod')) === 'true') ||
+      marks[marks.length - 1] ||
+      null;
 
-    // Most precise decimal from StudentVUE
     const gradeStrRaw = currentMark?.getAttribute('CalculatedScoreString') || '';
     const gradeNum = gradeStrRaw && !isNaN(parseFloat(gradeStrRaw)) ? parseFloat(gradeStrRaw) : null;
 
-    // Assignments (with category + dates)
+    // Category weights: try AssignmentType or Category elements
+    const weights = {};
+    currentMark?.querySelectorAll('AssignmentType, Category').forEach(node => {
+      const typeName = node.getAttribute('Type') || node.getAttribute('Name') || '';
+      const raw = node.getAttribute('Weight') || node.getAttribute('PointsPossibleWeight') || '';
+      const n = parseFloat(String(raw).replace('%','').trim());
+      if (typeName && !isNaN(n) && n > 0) weights[typeName] = n;
+    });
+
+    // Assignments
     const assignmentNodes = currentMark ? currentMark.querySelectorAll('Assignment') : [];
     const assignments = Array.from(assignmentNodes).map(assign => {
       const pointsStr = assign.getAttribute('Points') || '';
@@ -220,7 +200,7 @@ function parseStudentVueXML(xmlString) {
         assign.getAttribute('AssignedDate') ||
         '';
 
-      const graded = isGraded({ score, outOf, name: assign.getAttribute('Measure') || '' });
+      const graded = isGraded({ score, outOf });
       const pct = graded && outOf ? (score / outOf) * 100 : null;
 
       return {
@@ -234,7 +214,6 @@ function parseStudentVueXML(xmlString) {
       };
     });
 
-    // Category grade map
     const categoryPerc = computeCategoryPerc(assignments);
 
     return {
@@ -242,39 +221,46 @@ function parseStudentVueXML(xmlString) {
       section: period ? `Period ${period}` : 'N/A',
       teacher,
       credits: 1,
-      gradeStr: gradeStrRaw,
-      gradeNum,       // null if N/A
+      gradeStr: gradeStrRaw, // original precision
+      gradeNum,              // null if N/A
       assignments,
-      categoryPerc,   // {cat:{earned,possible,pct}}
-      weights,        // {cat: weight}
+      categoryPerc,
+      weights,
       hypoAssignments: [],
       hypoMode: false
     };
   });
 
-  return { student: { name: studentName, id: studentId }, classes, periods: uniquePeriods };
+  return { classes };
 }
 
 // ---------- Render ----------
-function renderStudentHeader(data) {
-  studentNameEl.textContent = data.student.name || 'Student';
-  studentIdEl.textContent = data.student.id ? `ID ${data.student.id}` : 'ID —';
-  statClassesEl.textContent = data.classes.length.toString();
-  const allAssignments = data.classes.reduce((acc, c) => acc + c.assignments.length + c.hypoAssignments.length, 0);
+function renderStudentHeader(meta, data) {
+  studentNameEl.textContent = meta?.name || 'Student';
+  studentIdEl.textContent = meta?.id ? `ID ${meta.id}` : 'ID —';
+
+  statClassesEl.textContent = (data?.classes?.length || 0).toString();
+  const allAssignments = (data?.classes || []).reduce((acc, c) => acc + c.assignments.length + c.hypoAssignments.length, 0);
   statAssignmentsEl.textContent = allAssignments.toString();
 
-  // Average excludes N/A
-  const graded = data.classes.filter(c => c.gradeNum !== null);
+  const graded = (data?.classes || []).filter(c => c.gradeNum !== null);
   const avg = graded.length ? graded.reduce((acc, c) => acc + c.gradeNum, 0) / graded.length : null;
   statAvgEl.textContent = avg === null ? '—' : `${avg.toFixed(2)}%`;
 }
 
-function renderPeriods(periods) {
-  toolsBar.classList.remove('hidden');
-  periodSelect.innerHTML = periods.length ? periods.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('') : '<option>No periods</option>';
-  periodSelect.disabled = !periods.length;
-  if (!currentPeriod && periods.length) currentPeriod = periods[0];
-  if (currentPeriod) periodSelect.value = currentPeriod;
+function categoryLine(cls, catName, effectiveCatPerc, weightsNorm) {
+  const wFrac = (weightsNorm[catName] ?? weightsNorm[catName?.toLowerCase()] ?? 0);
+  const weightLabel = wFrac ? `${(wFrac * 100).toFixed(0)}% of total` : 'Weight —';
+  const rawPct = effectiveCatPerc[catName]?.pct ?? null;
+  const contrib = rawPct != null ? rawPct * wFrac : null;
+  return `
+    <div class="category-pill">
+      <span class="category-name">${escapeHtml(catName || 'Uncategorized')}</span>
+      <span class="category-weight">${weightLabel}</span>
+      <span class="category-earned">${contrib == null ? '—' : `${contrib.toFixed(1)}% of total`}</span>
+      <span class="category-pct">${rawPct == null ? '—' : `${rawPct.toFixed(1)}%`}</span>
+    </div>
+  `;
 }
 
 function renderClassList(data) {
@@ -291,47 +277,35 @@ function renderClassList(data) {
   }
 
   classListEl.innerHTML = data.classes.map((cls, idx) => {
-    // Display grade only when hypothetical mode is enabled; otherwise hide
-    let displayGradeNum = null;
-    let displayGradeStr = '—';
+    // Always show class grade:
+    let displayNum = null;
+    let displayStr = '—';
 
     if (cls.hypoMode) {
       const combined = [...cls.assignments, ...cls.hypoAssignments];
       const catPerc = computeCategoryPerc(combined);
-      const hypoWeighted = computeWeightedGrade(catPerc, cls.weights);
-      if (hypoWeighted === null) {
-        displayGradeNum = null;
-        displayGradeStr = '—';
-      } else {
-        displayGradeNum = hypoWeighted;
-        displayGradeStr = `${hypoWeighted.toFixed(2)}%`;
+      const weighted = computeWeightedGrade(catPerc, cls.weights);
+      if (weighted !== null) {
+        displayNum = weighted;
+        displayStr = `${weighted.toFixed(2)}%`;
+      }
+    } else {
+      if (cls.gradeNum !== null) {
+        displayNum = cls.gradeNum;
+        displayStr = cls.gradeStr ? `${cls.gradeStr}%` : `${cls.gradeNum.toFixed(2)}%`;
       }
     }
 
-    const letter = gradeLetter(displayGradeNum);
-    const barWidth = displayGradeNum === null ? 0 : Math.max(0, Math.min(100, displayGradeNum));
+    const letter = gradeLetter(displayNum);
+    const barWidth = displayNum === null ? 0 : Math.max(0, Math.min(100, displayNum));
 
-    // Category pills (show to nearest tenth; weight display if available)
-    const categoriesHtml = (() => {
-      const allCategories = new Set([
-        ...Object.keys(cls.categoryPerc || {}),
-        ...Object.keys(cls.weights || {})
-      ]);
-      return Array.from(allCategories).map(cat => {
-        const pctObj = cls.hypoMode
-          ? computeCategoryPerc([...cls.assignments, ...cls.hypoAssignments])[cat]
-          : cls.categoryPerc[cat];
-        const pct = pctObj ? pctObj.pct : null;
-        const weight = cls.weights[cat];
-        return `
-          <div class="category-pill">
-            <span class="category-name">${escapeHtml(cat || 'Uncategorized')}</span>
-            <span class="category-weight">${weight ? `Weight ${weight}${weight <= 1.001 ? '' : '%'}` : 'Weight —'}</span>
-            <span class="category-pct">${pct === null || isNaN(pct) ? '—' : `${pct.toFixed(1)}%`}</span>
-          </div>
-        `;
-      }).join('');
-    })();
+    const effectiveCatPerc = cls.hypoMode
+      ? computeCategoryPerc([...cls.assignments, ...cls.hypoAssignments])
+      : cls.categoryPerc;
+
+    const norm = normalizeWeights(cls.weights);
+    const allCats = new Set([...Object.keys(effectiveCatPerc || {}), ...Object.keys(cls.weights || {})]);
+    const categoriesHtml = Array.from(allCats).map(cat => categoryLine(cls, cat, effectiveCatPerc, norm)).join('');
 
     const assignmentsHtml = [...cls.assignments, ...cls.hypoAssignments].map(a => {
       const pct = a.pct;
@@ -362,7 +336,7 @@ function renderClassList(data) {
         </div>
         <div class="class-right">
           <span class="grade-letter">${letter}</span>
-          <span class="grade-percent">${displayGradeStr}</span>
+          <span class="grade-percent">${displayStr}</span>
           <div class="progress">
             <div class="progress-fill" style="width:${barWidth}%"></div>
             <div class="progress-trail"></div>
@@ -376,7 +350,7 @@ function renderClassList(data) {
           </div>
 
           <div class="category-list">
-            ${categoriesHtml || '<div class="category-pill"><span class="category-name">No categories</span><span class="category-weight">Weight —</span><span class="category-pct">—</span></div>'}
+            ${categoriesHtml || '<div class="category-pill"><span class="category-name">No categories</span><span class="category-weight">Weight —</span><span class="category-earned">—</span><span class="category-pct">—</span></div>'}
           </div>
 
           <div class="assignments">
@@ -420,7 +394,7 @@ window.toggleDetails = (idx) => {
 };
 window.toggleHypoMode = (idx, checked) => {
   currentData.classes[idx].hypoMode = checked;
-  renderStudentHeader(currentData);
+  renderStudentHeader(currentData.meta, currentData);
   renderClassList(currentData);
 };
 window.addHypo = (idx) => {
@@ -438,7 +412,7 @@ window.addHypo = (idx) => {
     name, category, dueDate: parseDate(dueDateRaw), score, outOf, graded: true, pct: (score/outOf)*100
   });
 
-  renderStudentHeader(currentData);
+  renderStudentHeader(currentData.meta, currentData);
   renderClassList(currentData);
   setTimeout(() => {
     const el = document.getElementById(`details-${idx}`);
@@ -462,21 +436,25 @@ async function refetchPeriod() {
   const domain = domainInput.value.trim();
   try {
     setStatus('Refreshing…');
-    const xml = await fetchGradebook({ studentNumber, password, domain, reportPeriod: currentPeriod, childInt: childIntID });
-    const parsed = parseStudentVueXML(xml);
-    // Keep hypo state per class name if possible
-    if (currentData) {
-      for (const cls of parsed.classes) {
-        const prev = currentData.classes.find(c => c.name === cls.name);
+    const resp = await callBackend({ studentNumber, password, domain, reportPeriod: currentPeriod, childInt: childIntID });
+    const parsed = parseStudentVueXML(resp.data);
+    currentData = { ...parsed, meta: resp.student };
+    childIntID = resp.student?.childIntID || childIntID;
+
+    // preserve hypo state across refresh
+    if (currentData && window._prevClasses) {
+      for (const cls of currentData.classes) {
+        const prev = window._prevClasses.find(c => c.name === cls.name);
         if (prev) {
           cls.hypoAssignments = prev.hypoAssignments || [];
           cls.hypoMode = prev.hypoMode || false;
         }
       }
     }
-    currentData = parsed;
-    renderStudentHeader(currentData);
-    renderPeriods(parsed.periods);
+    window._prevClasses = JSON.parse(JSON.stringify(currentData.classes));
+
+    renderStudentHeader(currentData.meta, currentData);
+    renderPeriods(resp.periods);
     renderClassList(currentData);
     setStatus('Refreshed');
     toast('Grades refreshed', 'success');
@@ -485,6 +463,16 @@ async function refetchPeriod() {
     setStatus(err.message || 'Refresh failed');
     toast(err.message || 'Refresh failed', 'error');
   }
+}
+
+// ---------- Periods ----------
+function renderPeriods(periods) {
+  toolsBar.classList.remove('hidden');
+  const opts = (periods || []).map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
+  periodSelect.innerHTML = opts || '<option>No periods</option>';
+  periodSelect.disabled = !(periods && periods.length);
+  if (!currentPeriod && periods && periods.length) currentPeriod = periods[0];
+  if (currentPeriod) periodSelect.value = currentPeriod;
 }
 
 // ---------- Form handling ----------
@@ -509,17 +497,23 @@ loginForm.addEventListener('submit', async (e) => {
   setStatus('Authenticating with StudentVUE…');
 
   try {
-    const xml = await fetchGradebook({ studentNumber, password, domain, reportPeriod: '', childInt: '0' });
-    const parsed = parseStudentVueXML(xml);
-    currentData = parsed;
+    const resp = await callBackend({ studentNumber, password, domain, reportPeriod: '', childInt: '0' });
+    const parsed = parseStudentVueXML(resp.data);
+    currentData = { ...parsed, meta: resp.student };
+    childIntID = resp.student?.childIntID || '0';
     persistInputs();
-    setStatus(`Loaded grades for ${parsed.student.name} (${parsed.student.id || 'ID —'})`);
-    toast('Grades loaded successfully', 'success');
+
+    // Default period
+    currentPeriod = (resp.periods && resp.periods[0]) || '';
+    window._prevClasses = JSON.parse(JSON.stringify(currentData.classes));
 
     studentHeader.classList.remove('hidden');
-    renderStudentHeader(currentData);
-    renderPeriods(parsed.periods);
+    renderStudentHeader(currentData.meta, currentData);
+    renderPeriods(resp.periods);
     renderClassList(currentData);
+
+    setStatus(`Loaded grades for ${currentData.meta?.name || 'Student'} (${currentData.meta?.id || 'ID —'})`);
+    toast('Grades loaded successfully', 'success');
   } catch (err) {
     console.error(err);
     setStatus(err.message || 'Login failed');
