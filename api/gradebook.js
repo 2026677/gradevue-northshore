@@ -46,39 +46,24 @@ export default async function handler(req, res) {
       body: soapBody
     });
 
-    const xmlText = await response.text();
+    const xmlText = await response. text();
     
-    console.log('Response status:', response. status);
-    console.log('Response length:', xmlText.length);
+    console.log('=== FULL RESPONSE ===');
+    console.log(xmlText);
+    console.log('=== END RESPONSE ===');
     
-    if (xmlText.includes('soap:Fault') || xmlText.includes('faultstring')) {
-      const faultMatch = xmlText.match(/<faultstring>(.*?)<\/faultstring>/);
-      throw new Error(faultMatch ? faultMatch[1] : 'SOAP fault');
-    }
-    
-    const resultMatch = xmlText.match(/<ProcessWebServiceRequestResult>([\s\S]*? )<\/ProcessWebServiceRequestResult>/);
-    
-    if (!resultMatch) {
-      console.error('No result found.  Response preview:', xmlText.substring(0, 500));
-      throw new Error('Invalid response structure');
-    }
-
-    const decodedData = resultMatch[1]
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&amp;/g, '&');
-
+    // Return the raw response so we can see it
     return res.status(200).json({ 
-      success: true, 
-      data:  decodedData
+      success: true,
+      raw: xmlText,
+      data:  xmlText
     });
 
   } catch (err) {
     console.error('API Error:', err.message);
     return res.status(500).json({ 
       error: 'Login failed', 
-      details: err. message 
+      details: err.message 
     });
   }
 }
