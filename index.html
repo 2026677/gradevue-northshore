@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>StudentVUE Grade Viewer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #111827;
+      --accent: #3b82f6;
+      --accent-2: #22d3ee;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --border: #1f2937;
+      --success: #22c55e;
+      --warn: #f59e0b;
+      --danger: #ef4444;
+      --shadow: 0 10px 30px rgba(0,0,0,0.25);
+      font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: radial-gradient(circle at 20% 20%, rgba(34,211,238,0.08), transparent 35%),
+      radial-gradient(circle at 80% 0%, rgba(59,130,246,0.12), transparent 40%),
+      var(--bg); color: var(--text); min-height: 100vh;
+      display: flex; justify-content: center; padding: 24px;
+    }
+    .app { width: min(1100px, 100%); }
+    header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px; flex-wrap: wrap; }
+    .title { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.02em; }
+    .pill { padding: 8px 12px; border-radius: 999px; background: rgba(59,130,246,0.12); color: #cbd5f5; font-size: 0.9rem; }
+    .card {
+      background: linear-gradient(145deg, rgba(255,255,255,0.02), rgba(255,255,255,0)),
+      var(--card);
+      border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow);
+    }
+    .panel { padding: 18px 18px 2px; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+    label { display: block; font-size: 0.9rem; color: var(--muted); margin-bottom: 6px; }
+    input {
+      width: 100%; padding: 12px 12px; border-radius: 10px; border: 1px solid var(--border);
+      background: #0b1221; color: var(--text); font-size: 1rem;
+      transition: border 0.2s, box-shadow 0.2s;
+    }
+    input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59,130,246,0.25); }
+    .btn {
+      cursor: pointer; border: none; border-radius: 12px; padding: 12px 16px;
+      font-weight: 600; color: white; background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      box-shadow: 0 10px 20px rgba(59,130,246,0.25); transition: transform 0.1s ease, box-shadow 0.2s ease;
+    }
+    .btn:active { transform: translateY(1px); box-shadow: 0 6px 14px rgba(59,130,246,0.25); }
+    .btn.secondary { background: #1f2937; color: var(--text); box-shadow: none; border: 1px solid var(--border); }
+    .flex { display: flex; align-items: center; gap: 10px; }
+    .login-row { margin: 10px 0 16px; }
+    .status { font-size: 0.95rem; color: var(--muted); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+    .class-card { padding: 14px; border-radius: 12px; border: 1px solid var(--border); background: #0c1324; position: relative; overflow: hidden; }
+    .class-card h3 { margin: 0 0 6px; font-size: 1.05rem; }
+    .tag { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; font-size: 0.85rem; color: white; }
+    .tag.grade { background: rgba(59,130,246,0.18); border: 1px solid rgba(59,130,246,0.4); }
+    .tag.section { background: rgba(34,197,94,0.18); border: 1px solid rgba(34,197,94,0.4); }
+    .tag.credits { background: rgba(234,179,8,0.18); border: 1px solid rgba(234,179,8,0.4); }
+    .meta { color: var(--muted); font-size: 0.9rem; margin: 4px 0 10px; }
+    .assignments { margin-top: 10px; border-top: 1px dashed var(--border); padding-top: 10px; }
+    .assignment-row {
+      display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 8px 10px;
+      border-radius: 10px; background: rgba(255,255,255,0.02); border: 1px solid var(--border);
+    }
+    .assign-name { font-weight: 600; }
+    .assign-score { font-weight: 700; }
+    .good { color: var(--success); }
+    .warn { color: var(--warn); }
+    .bad { color: var(--danger); }
+    .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+    .hypo-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; align-items: end; margin-top: 8px; }
+    .muted { color: var(--muted); }
+    .footer { margin-top: 18px; color: var(--muted); font-size: 0.9rem; }
+    .badge { padding: 6px 10px; border-radius: 999px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); }
+    .tooltip { color: var(--muted); font-size: 0.9rem; }
+    @media (max-width: 640px) {
+      header { flex-direction: column; align-items: flex-start; }
+      .panel { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="title">StudentVUE Grade Viewer</div>
+      <div class="pill">Single-file • Mock frontend</div>
+    </header>
+
+    <div class="card">
+      <div class="panel">
+        <div>
+          <label>Student Number</label>
+          <input id="studentNumber" placeholder="e.g. 123456" />
+        </div>
+        <div>
+          <label>Password</label>
+          <input id="password" type="password" placeholder="Password" />
+        </div>
+        <div>
+          <label>StudentVUE Domain</label>
+          <input id="domain" placeholder="https://wa-nor-psv.edupoint.com/" />
+        </div>
+      </div>
+      <div class="panel login-row">
+        <div class="flex">
+          <button class="btn" id="loginBtn">Log in & Fetch Grades</button>
+          <button class="btn secondary" id="loadSampleBtn">Load Sample Data</button>
+          <span class="status" id="status">Awaiting input…</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px; padding: 16px;">
+      <div class="toolbar">
+        <div class="badge">Hypothetical mode: add a what-if assignment to any class</div>
+        <div class="tooltip">Real API calls require a backend proxy; this demo uses mock data.</div>
+      </div>
+      <div id="classes" class="grid"></div>
+    </div>
+
+    <div class="footer">
+      <div>Security note: Do not send your StudentVUE credentials directly from the browser. Use a secure backend proxy/service that you control.</div>
+    </div>
+  </div>
+
+  <script>
+    // ---------- Mock data & utilities ----------
+    const sampleData = {
+      student: { name: "Alex Rivera", id: "123456" },
+      classes: [
+        {
+          name: "AP Calculus AB",
+          section: "Period 1",
+          teacher: "Ms. Johnson",
+          credits: 1,
+          grade: 93,
+          assignments: [
+            { name: "Unit 4 Quiz", score: 18, outOf: 20 },
+            { name: "Homework 12", score: 10, outOf: 10 },
+            { name: "Chapter Test", score: 44, outOf: 50 }
+          ]
+        },
+        {
+          name: "English 11",
+          section: "Period 2",
+          teacher: "Mr. Lewis",
+          credits: 1,
+          grade: 87,
+          assignments: [
+            { name: "Essay Draft", score: 42, outOf: 50 },
+            { name: "Reading Quiz", score: 9, outOf: 10 },
+            { name: "Presentation", score: 18, outOf: 20 }
+          ]
+        },
+        {
+          name: "Physics",
+          section: "Period 3",
+          teacher: "Dr. Chen",
+          credits: 1,
+          grade: 78,
+          assignments: [
+            { name: "Lab Report", score: 34, outOf: 50 },
+            { name: "Homework Set 5", score: 14, outOf: 20 },
+            { name: "Kinematics Quiz", score: 16, outOf: 20 }
+          ]
+        },
+        {
+          name: "US History",
+          section: "Period 4",
+          teacher: "Ms. Patel",
+          credits: 1,
+          grade: 91,
+          assignments: [
+            { name: "DBQ Essay", score: 46, outOf: 50 },
+            { name: "Map Quiz", score: 19, outOf: 20 },
+            { name: "Project", score: 28, outOf: 30 }
+          ]
+        }
+      ]
+    };
+
+    const statusEl = document.getElementById("status");
+    const classesEl = document.getElementById("classes");
+    const loginBtn = document.getElementById("loginBtn");
+    const loadSampleBtn = document.getElementById("loadSampleBtn");
+
+    function setStatus(msg) { statusEl.textContent = msg; }
+
+    // ---------- Mock login & fetch (replace with real API/proxy) ----------
+    async function mockLoginAndFetch({ studentNumber, password, domain }) {
+      return new Promise((resolve, reject) => {
+        setTimeout(() => {
+          if (!studentNumber || !password || !domain) {
+            return reject(new Error("All fields are required."));
+          }
+          // In a real implementation: send credentials securely to your backend proxy.
+          resolve(structuredClone(sampleData));
+        }, 700);
+      });
+    }
+
+    // ---------- Grade helpers ----------
+    function computeGrade(assignments) {
+      const totals = assignments.reduce(
+        (acc, a) => {
+          acc.earned += Number(a.score) || 0;
+          acc.possible += Number(a.outOf) || 0;
+          return acc;
+        },
+        { earned: 0, possible: 0 }
+      );
+      return totals.possible ? Math.round((totals.earned / totals.possible) * 100) : 0;
+    }
+
+    function scoreClass(grade) {
+      if (grade >= 90) return "good";
+      if (grade >= 80) return "warn";
+      return "bad";
+    }
+
+    // ---------- Render ----------
+    function renderClasses(data) {
+      classesEl.innerHTML = "";
+      if (!data || !data.classes || !data.classes.length) {
+        classesEl.innerHTML = `<div class="muted">No classes to display.</div>`;
+        return;
+      }
+
+      data.classes.forEach((cls, idx) => {
+        const card = document.createElement("div");
+        card.className = "class-card";
+
+        const currentGrade = computeGrade(cls.assignments);
+        cls.grade = currentGrade;
+
+        card.innerHTML = `
+          <div class="flex" style="justify-content: space-between; align-items: flex-start;">
+            <div>
+              <h3>${cls.name}</h3>
+              <div class="meta">${cls.teacher} • ${cls.section}</div>
+              <div class="flex" style="flex-wrap: wrap; gap:8px;">
+                <span class="tag grade">Grade: <strong>${currentGrade}%</strong></span>
+                <span class="tag section">${cls.section}</span>
+                <span class="tag credits">${cls.credits} cr</span>
+              </div>
+            </div>
+            <button class="btn secondary" style="padding:8px 10px;" data-class="${idx}">+ Hypothetical</button>
+          </div>
+          <div class="assignments" id="assignments-${idx}">
+            ${cls.assignments
+              .map(a => {
+                const pct = a.outOf ? Math.round((a.score / a.outOf) * 100) : 0;
+                return `
+                <div class="assignment-row">
+                  <div>
+                    <div class="assign-name">${a.name}</div>
+                    <div class="muted">${a.score} / ${a.outOf}</div>
+                  </div>
+                  <div class="assign-score ${scoreClass(pct)}">${pct}%</div>
+                </div>`;
+              })
+              .join("")}
+          </div>
+          <div class="hypo-form" data-form="${idx}" style="display:none;">
+            <div>
+              <label>Assignment name</label>
+              <input placeholder="e.g. Practice Quiz" data-field="name" />
+            </div>
+            <div>
+              <label>Score</label>
+              <input type="number" min="0" step="0.1" placeholder="e.g. 18" data-field="score" />
+            </div>
+            <div>
+              <label>Out of</label>
+              <input type="number" min="0" step="0.1" placeholder="e.g. 20" data-field="outOf" />
+            </div>
+            <button class="btn" style="margin-top:4px;" data-add="${idx}">Add Hypothetical</button>
+            <button class="btn secondary" style="margin-top:4px;" data-cancel="${idx}">Cancel</button>
+            <div class="muted" style="grid-column: 1 / -1;">This will not be saved—just a what-if calculation.</div>
+          </div>
+        `;
+        classesEl.appendChild(card);
+      });
+
+      // Attach events for hypothetical forms
+      classesEl.querySelectorAll("button[data-class]").forEach(btn => {
+        btn.onclick = () => {
+          const idx = btn.getAttribute("data-class");
+          const form = classesEl.querySelector(`.hypo-form[data-form="${idx}"]`);
+          form.style.display = form.style.display === "none" ? "grid" : "none";
+        };
+      });
+
+      classesEl.querySelectorAll("button[data-cancel]").forEach(btn => {
+        btn.onclick = () => {
+          const idx = btn.getAttribute("data-cancel");
+          const form = classesEl.querySelector(`.hypo-form[data-form="${idx}"]`);
+          form.style.display = "none";
+        };
+      });
+
+      classesEl.querySelectorAll("button[data-add]").forEach(btn => {
+        btn.onclick = () => {
+          const idx = btn.getAttribute("data-add");
+          const form = classesEl.querySelector(`.hypo-form[data-form="${idx}"]`);
+          const name = form.querySelector('[data-field="name"]').value.trim() || "What-if";
+          const score = parseFloat(form.querySelector('[data-field="score"]').value);
+          const outOf = parseFloat(form.querySelector('[data-field="outOf"]').value);
+
+          if (isNaN(score) || isNaN(outOf) || outOf <= 0) {
+            alert("Enter valid score and out-of values.");
+            return;
+          }
+
+          // Clone data to avoid mutating the base
+          const temp = structuredClone(data);
+          temp.classes[idx].assignments.push({ name, score, outOf });
+
+          // Re-render class card portion only
+          renderClasses(temp);
+          setStatus(`What-if added to ${temp.classes[idx].name}. New grade: ${temp.classes[idx].grade}%`);
+        };
+      });
+    }
+
+    // ---------- Actions ----------
+    loginBtn.addEventListener("click", async () => {
+      const studentNumber = document.getElementById("studentNumber").value.trim();
+      const password = document.getElementById("password").value;
+      const domain = document.getElementById("domain").value.trim();
+      setStatus("Authenticating…");
+      try {
+        const data = await mockLoginAndFetch({ studentNumber, password, domain });
+        setStatus(`Loaded grades for ${data.student.name} (${data.student.id}) from ${domain}`);
+        renderClasses(data);
+      } catch (e) {
+        setStatus(e.message || "Login failed.");
+      }
+    });
+
+    loadSampleBtn.addEventListener("click", () => {
+      renderClasses(structuredClone(sampleData));
+      setStatus("Loaded sample data (demo).");
+    });
+
+    // Initial state
+    renderClasses(null);
+  </script>
+</body>
+</html>
