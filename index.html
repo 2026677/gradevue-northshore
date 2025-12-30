@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>GradeVue — Northshore</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="color-scheme" content="dark light" />
+  <meta name="color-scheme" content="dark" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -21,7 +21,6 @@
         </div>
       </div>
       <div class="nav-actions">
-        <button id="themeToggle" class="btn btn-ghost" aria-label="Toggle theme">🌗 Theme</button>
         <div class="badge">Live API • Secure Backend</div>
       </div>
     </header>
@@ -54,10 +53,6 @@
               <button id="loginBtn" type="submit" class="btn btn-primary">
                 <span class="btn-icon">🚀</span>
                 <span>Log in & Fetch Grades</span>
-              </button>
-              <button id="loadSampleBtn" type="button" class="btn btn-secondary">
-                <span class="btn-icon">📊</span>
-                <span>Load Sample Data</span>
               </button>
               <div id="status" class="status">⏳ Awaiting input…</div>
             </div>
@@ -92,39 +87,18 @@
         </div>
       </section>
 
-      <!-- Tools -->
-      <section id="toolsBar" class="tools hidden">
-        <div class="tool-left">
-          <div class="input-wrap">
-            <span class="input-icon">🔎</span>
-            <input id="searchInput" class="tool-input" type="text" placeholder="Search classes…" />
-          </div>
-        </div>
-        <div class="tool-right">
-          <label class="select-wrap">
-            <span class="select-label">Sort</span>
-            <select id="sortSelect" class="select">
-              <option value="name-asc">Name A→Z</option>
-              <option value="name-desc">Name Z→A</option>
-              <option value="grade-desc">Grade High→Low</option>
-              <option value="grade-asc">Grade Low→High</option>
-            </select>
-          </label>
-        </div>
-      </section>
-
-      <!-- Grades -->
+      <!-- Classes List -->
       <section class="card">
         <div class="card-header">
           <h2 class="card-title">Your Classes</h2>
-          <p class="card-subtitle">Click “+ What‑If” to simulate hypothetical grades</p>
+          <p class="card-subtitle">Click a class to view assignments and What‑If calculator</p>
         </div>
         <div class="card-body">
-          <div id="classes" class="classes-grid">
-            <!-- Skeletons -->
-            <div class="skeleton-card"></div>
-            <div class="skeleton-card"></div>
-            <div class="skeleton-card"></div>
+          <div id="classList" class="class-list">
+            <!-- skeleton rows -->
+            <div class="skeleton-row"></div>
+            <div class="skeleton-row"></div>
+            <div class="skeleton-row"></div>
           </div>
         </div>
       </section>
@@ -137,9 +111,7 @@
     </main>
   </div>
 
-  <!-- Toasts -->
   <div id="toastHost" class="toast-host" aria-live="polite" aria-atomic="true"></div>
-
   <script src="./script.js"></script>
 </body>
 </html>
