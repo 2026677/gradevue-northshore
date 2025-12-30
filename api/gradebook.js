@@ -3,7 +3,7 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   
-  if (req. method === 'OPTIONS') {
+  if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
   
@@ -13,7 +13,7 @@ export default async function handler(req, res) {
 
   const { domain, username, password } = req. body || {};
   
-  if (!domain || !username || !password) {
+  if (!domain || ! username || !password) {
     return res.status(400).json({ error: 'Missing credentials' });
   }
 
@@ -21,7 +21,7 @@ export default async function handler(req, res) {
     const cleanDomain = domain.replace(/\/$/, '');
     
     const soapBody = `<?xml version="1.0" encoding="utf-8"?>
-<soap: Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
   <soap:Body>
     <ProcessWebServiceRequest xmlns="http://edupoint.com/webservices/">
       <userID>${username}</userID>
@@ -35,32 +35,50 @@ export default async function handler(req, res) {
   </soap: Body>
 </soap:Envelope>`;
 
-    const endpoint = `${cleanDomain}/Service/PXPCommunication. asmx`;
+    const endpoint = `${cleanDomain}/Service/PXPCommunication.asmx`;
+    
+    console.log('Calling endpoint:', endpoint);
     
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'text/xml; charset=utf-8',
-        'SOAPAction':  'http://edupoint.com/webservices/ProcessWebServiceRequest'
+        'SOAPAction': 'http://edupoint.com/webservices/ProcessWebServiceRequest'
       },
-      body: soapBody
+      body:  soapBody
     });
 
-    const xmlText = await response. text();
+    const xmlText = await response.text();
     
-    console.log('=== FULL RESPONSE ===');
-    console.log(xmlText);
-    console.log('=== END RESPONSE ===');
+    console.log('Response status:', response.status);
+    console.log('Response length:', xmlText.length);
+    console.log('Response preview:', xmlText.substring(0, 300));
     
-    // Return the raw response so we can see it
+    if (xmlText.includes('soap:Fault') || xmlText.includes('faultstring')) {
+      const faultMatch = xmlText.match(/<faultstring>(.*?)<\/faultstring>/);
+      throw new Error(faultMatch ? faultMatch[1] : 'SOAP fault');
+    }
+    
+    const resultMatch = xmlText.match(/<ProcessWebServiceRequestResult>([\s\S]*?)<\/ProcessWebServiceRequestResult>/);
+    
+    if (!resultMatch) {
+      console.error('No result found.  Response:', xmlText. substring(0, 500));
+      throw new Error('Invalid response structure');
+    }
+
+    const decodedData = resultMatch[1]
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&amp;/g, '&');
+
     return res.status(200).json({ 
-      success: true,
-      raw: xmlText,
-      data:  xmlText
+      success: true, 
+      data:  decodedData
     });
 
   } catch (err) {
-    console.error('API Error:', err.message);
+    console.error('API Error:', err. message);
     return res.status(500).json({ 
       error: 'Login failed', 
       details: err.message 
