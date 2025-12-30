@@ -26,7 +26,7 @@
     </header>
 
     <main class="container">
-      <!-- Login Card -->
+      <!-- Login -->
       <section class="card">
         <div class="card-header">
           <h2 class="card-title">Student Login</h2>
@@ -83,6 +83,21 @@
               <div id="statAssignments" class="stat-value">0</div>
             </div>
           </div>
+        </div>
+      </section>
+
+      <!-- Tools -->
+      <section id="toolsBar" class="tools hidden">
+        <div class="tool-left">
+          <label class="select-wrap">
+            <span class="select-label">Grading period</span>
+            <select id="periodSelect" class="select" disabled>
+              <option>Loading…</option>
+            </select>
+          </label>
+        </div>
+        <div class="tool-right">
+          <button id="refreshBtn" class="btn btn-outline">Refresh</button>
         </div>
       </section>
 
