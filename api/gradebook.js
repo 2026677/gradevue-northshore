@@ -51,7 +51,6 @@ export default async function handler(req, res) {
 </ProcessWebServiceRequest>`.trim();
 
     async function pxpCall(methodName, paramObj) {
-      // paramObj -> XML like <Parms><ChildIntID>0</ChildIntID>...</Parms>
       const paramStrXml = escapeXml(buildParms(paramObj));
       const body = soapEnvelope(pxpBody(methodName, paramStrXml));
       let text = "";
@@ -85,7 +84,6 @@ export default async function handler(req, res) {
     }
 
     function buildParms(obj) {
-      // Simple XML builder for <Parms>...</Parms>
       const entries = Object.entries(obj || {});
       const inner = entries.map(([k, v]) => `<${k}>${v ?? ""}</${k}>`).join("");
       return `<Parms>${inner}</Parms>`;
@@ -107,14 +105,13 @@ export default async function handler(req, res) {
         .replace(/&amp;/g, "&");
     }
 
-    // 1) StudentInfo for accurate name + ChildIntID
+    // 1) StudentInfo for accurate name + ChildIntID (fallbacks below)
     let studentName = "";
     let studentId = "";
     let childIntID = childIntFromClient || "0";
 
     try {
-      const studentInfoXml = await pxpCall("StudentInfo", { ChildIntID: childIntID });
-      // Best-effort attribute extraction
+      const studentInfoXml = await pxpCall("StudentInfo", { ChildIntID: childIntID || "0" });
       studentName =
         (studentInfoXml.match(/StudentInfo[^>]*StudentName="([^"]*)"/)?.[1]) ||
         (studentInfoXml.match(/Student[^>]*Name="([^"]*)"/)?.[1]) ||
@@ -128,46 +125,76 @@ export default async function handler(req, res) {
         (studentInfoXml.match(/ChildIntID="(\d+)"/)?.[1]) ||
         "";
       if (childAttr) childIntID = childAttr;
-    } catch (e) {
-      // Continue without StudentInfo if district disallows it; we'll still call Gradebook
+    } catch {
+      // continue; we'll fill from Gradebook if possible
     }
 
-    // 2) Gradebook for the selected / default report period
+    // 2) Gradebook for the selected/default report period
     const gradebookXml = await pxpCall("Gradebook", {
       ChildIntID: childIntID || "0",
       ReportPeriod: reportPeriod || "",
     });
 
-    // 3) Extract reporting periods (robust)
-    const periodNames = [];
-    // <ReportingPeriods><ReportPeriod Name="..." /></ReportingPeriods>
-    gradebookXml.replace(/<ReportPeriod\b[^>]*?>/g, (m) => {
+    // Fallback: get StudentInfo from Gradebook block if present
+    if (!studentName || !studentId) {
+      const siMatch = gradebookXml.match(/<StudentInfo\b[^>]*>/);
+      if (siMatch) {
+        studentName =
+          (siMatch[0].match(/\bStudentName="([^"]*)"/)?.[1]) || studentName;
+        studentId =
+          (siMatch[0].match(/\bStudentNumber="([^"]*)"/)?.[1]) || studentId;
+      }
+    }
+    if (!studentId) studentId = username; // final fallback
+    if (!studentName) studentName = username ? `Student ${username}` : "Student";
+
+    // 3) Extract reporting periods + active
+    const periods = [];
+    gradebookXml.replace(/<ReportPeriod\b([^>]*)>/g, (_, attrs) => {
       const name =
-        (m.match(/\bName="([^"]*)"/)?.[1]) ||
-        (m.match(/\bDescr="([^"]*)"/)?.[1]) ||
-        (m.match(/\bAbbrv="([^"]*)"/)?.[1]) ||
+        (attrs.match(/\bName="([^"]*)"/)?.[1]) ||
+        (attrs.match(/\bDescr="([^"]*)"/)?.[1]) ||
+        (attrs.match(/\bAbbrv="([^"]*)"/)?.[1]) ||
         "";
-      if (name) periodNames.push(name);
-      return m;
+      const selected =
+        (attrs.match(/\bSelected="([^"]*)"/)?.[1]) ||
+        (attrs.match(/\bIsCurrent="([^"]*)"/)?.[1]) ||
+        "";
+      if (name) periods.push({ name, active: /^(true|1)$/i.test(selected) });
+      return _;
     });
-    // Fallback from Marks
-    if (periodNames.length === 0) {
-      gradebookXml.replace(/<Mark\b[^>]*?>/g, (m) => {
+    if (periods.length === 0) {
+      // Fallback from marks
+      gradebookXml.replace(/<Mark\b([^>]*)>/g, (_, attrs) => {
         const name =
-          (m.match(/\bMarkName="([^"]*)"/)?.[1]) ||
-          (m.match(/\bMarkCalc="([^"]*)"/)?.[1]) ||
+          (attrs.match(/\bMarkName="([^"]*)"/)?.[1]) ||
+          (attrs.match(/\bMarkCalc="([^"]*)"/)?.[1]) ||
           "";
-        if (name) periodNames.push(name);
-        return m;
+        const current =
+          (attrs.match(/\bIsCurrent="([^"]*)"/)?.[1]) ||
+          (attrs.match(/\bIsCurrentReportingPeriod="([^"]*)"/)?.[1]) ||
+          "";
+        if (name) periods.push({ name, active: /^(true|1)$/i.test(current) });
+        return _;
       });
     }
-    const periods = Array.from(new Set(periodNames));
+    // Deduplicate by name
+    const seen = new Set();
+    const uniquePeriods = periods.filter(p => {
+      if (seen.has(p.name)) return false;
+      seen.add(p.name);
+      return true;
+    });
+    // If none marked active, default first
+    if (!uniquePeriods.some(p => p.active) && uniquePeriods.length) {
+      uniquePeriods[0].active = true;
+    }
 
     return res.status(200).json({
       success: true,
       data: gradebookXml,
       student: { name: studentName, id: studentId, childIntID },
-      periods,
+      periods: uniquePeriods,
     });
   } catch (err) {
     return res.status(500).json({ error: "Login failed", details: err.message || "Unknown error" });
