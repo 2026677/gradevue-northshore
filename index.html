@@ -36,25 +36,24 @@
           <form id="loginForm" novalidate>
             <div class="form-grid">
               <div class="form-group">
-                <label for="studentNumber">📋 Student Number</label>
+                <label for="studentNumber">Student Number</label>
                 <input id="studentNumber" type="text" inputmode="numeric" autocomplete="username" placeholder="e.g. 123456" />
               </div>
               <div class="form-group">
-                <label for="password">🔒 Password</label>
+                <label for="password">Password</label>
                 <input id="password" type="password" autocomplete="current-password" placeholder="Your StudentVUE password" />
               </div>
               <div class="form-group">
-                <label for="domain">🌐 StudentVUE Domain</label>
+                <label for="domain">StudentVUE Domain</label>
                 <input id="domain" type="url" placeholder="https://wa-nor-psv.edupoint.com" />
                 <small class="helper">Must be an edupoint.com domain</small>
               </div>
             </div>
             <div class="controls">
               <button id="loginBtn" type="submit" class="btn btn-primary">
-                <span class="btn-icon">🚀</span>
                 <span>Log in & Fetch Grades</span>
               </button>
-              <div id="status" class="status">⏳ Awaiting input…</div>
+              <div id="status" class="status">Awaiting input…</div>
             </div>
           </form>
         </div>
@@ -64,7 +63,7 @@
       <section id="studentHeader" class="card hidden">
         <div class="card-body student-bar">
           <div class="student-ident">
-            <div class="avatar">👩‍🎓</div>
+            <div class="avatar">S</div>
             <div class="student-meta">
               <div id="studentName" class="student-name">Student Name</div>
               <div id="studentId" class="student-id">ID —</div>
@@ -91,11 +90,10 @@
       <section class="card">
         <div class="card-header">
           <h2 class="card-title">Your Classes</h2>
-          <p class="card-subtitle">Click a class to view assignments and What‑If calculator</p>
+          <p class="card-subtitle">Click a class to view assignments and Hypothetical mode</p>
         </div>
         <div class="card-body">
           <div id="classList" class="class-list">
-            <!-- skeleton rows -->
             <div class="skeleton-row"></div>
             <div class="skeleton-row"></div>
             <div class="skeleton-row"></div>
@@ -105,8 +103,10 @@
 
       <!-- Footer -->
       <footer class="footer">
-        <p>🔐 Your credentials are sent securely to your Vercel backend.</p>
-        <p class="muted">Never share your StudentVUE password with third parties.</p>
+        <p>
+          Gradevue is not affiliated with or endorsed by Edupoint™<br/>
+          This site does not intercept or save your grades whatsoever on their path to your computer. Never share your StudentVUE password with third parties that intend to do so.
+        </p>
       </footer>
     </main>
   </div>
