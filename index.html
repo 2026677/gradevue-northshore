@@ -5,8 +5,8 @@
   <title>StudentVUE Grade Viewer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    :root {
-      --bg: #0f172a;
+    : root {
+      --bg:  #0f172a;
       --card: #111827;
       --accent: #3b82f6;
       --accent-2: #22d3ee;
@@ -26,14 +26,14 @@
       var(--bg); color: var(--text); min-height: 100vh;
       display: flex; justify-content: center; padding: 24px;
     }
-    .app { width: min(1100px, 100%); }
+    . app { width: min(1100px, 100%); }
     header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px; flex-wrap: wrap; }
     .title { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.02em; }
     .pill { padding: 8px 12px; border-radius: 999px; background: rgba(59,130,246,0.12); color: #cbd5f5; font-size: 0.9rem; }
     .card {
       background: linear-gradient(145deg, rgba(255,255,255,0.02), rgba(255,255,255,0)),
       var(--card);
-      border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow);
+      border:  1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow);
     }
     .panel { padding: 18px 18px 2px; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
     label { display: block; font-size: 0.9rem; color: var(--muted); margin-bottom: 6px; }
@@ -45,22 +45,22 @@
     input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59,130,246,0.25); }
     .btn {
       cursor: pointer; border: none; border-radius: 12px; padding: 12px 16px;
-      font-weight: 600; color: white; background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      font-weight: 600; color:  white; background: linear-gradient(135deg, var(--accent), var(--accent-2));
       box-shadow: 0 10px 20px rgba(59,130,246,0.25); transition: transform 0.1s ease, box-shadow 0.2s ease;
     }
     .btn:active { transform: translateY(1px); box-shadow: 0 6px 14px rgba(59,130,246,0.25); }
     .btn.secondary { background: #1f2937; color: var(--text); box-shadow: none; border: 1px solid var(--border); }
     .flex { display: flex; align-items: center; gap: 10px; }
-    .login-row { margin: 10px 0 16px; }
+    .login-row { margin:  10px 0 16px; }
     .status { font-size: 0.95rem; color: var(--muted); }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
     .class-card { padding: 14px; border-radius: 12px; border: 1px solid var(--border); background: #0c1324; position: relative; overflow: hidden; }
     .class-card h3 { margin: 0 0 6px; font-size: 1.05rem; }
-    .tag { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; font-size: 0.85rem; color: white; }
+    . tag { display: inline-flex; align-items: center; gap:  6px; padding: 6px 10px; border-radius: 999px; font-size: 0.85rem; color: white; }
     .tag.grade { background: rgba(59,130,246,0.18); border: 1px solid rgba(59,130,246,0.4); }
     .tag.section { background: rgba(34,197,94,0.18); border: 1px solid rgba(34,197,94,0.4); }
     .tag.credits { background: rgba(234,179,8,0.18); border: 1px solid rgba(234,179,8,0.4); }
-    .meta { color: var(--muted); font-size: 0.9rem; margin: 4px 0 10px; }
+    .meta { color: var(--muted); font-size: 0.9rem; margin:  4px 0 10px; }
     .assignments { margin-top: 10px; border-top: 1px dashed var(--border); padding-top: 10px; }
     .assignment-row {
       display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 8px 10px;
@@ -87,7 +87,7 @@
   <div class="app">
     <header>
       <div class="title">StudentVUE Grade Viewer</div>
-      <div class="pill">Single-file • Mock frontend</div>
+      <div class="pill">Live API • Vercel Backend</div>
     </header>
 
     <div class="card">
@@ -102,7 +102,7 @@
         </div>
         <div>
           <label>StudentVUE Domain</label>
-          <input id="domain" placeholder="https://wa-nor-psv.edupoint.com/" />
+          <input id="domain" placeholder="https://wa-nor-psv.edupoint.com" value="https://wa-nor-psv.edupoint.com" />
         </div>
       </div>
       <div class="panel login-row">
@@ -114,24 +114,27 @@
       </div>
     </div>
 
-    <div class="card" style="margin-top:16px; padding: 16px;">
+    <div class="card" style="margin-top:16px; padding:  16px;">
       <div class="toolbar">
-        <div class="badge">Hypothetical mode: add a what-if assignment to any class</div>
-        <div class="tooltip">Real API calls require a backend proxy; this demo uses mock data.</div>
+        <div class="badge">Hypothetical mode:  add a what-if assignment to any class</div>
+        <div class="tooltip">Credentials are sent securely to your Vercel backend. </div>
       </div>
       <div id="classes" class="grid"></div>
     </div>
 
     <div class="footer">
-      <div>Security note: Do not send your StudentVUE credentials directly from the browser. Use a secure backend proxy/service that you control.</div>
+      <div>Security note: Your credentials are sent to your own Vercel backend. Never share your StudentVUE password with third parties.</div>
     </div>
   </div>
 
   <script>
+    // ---------- API Configuration ----------
+    const API_URL = 'https://gradevue-northshore.vercel.app/api/gradebook';
+
     // ---------- Mock data & utilities ----------
     const sampleData = {
       student: { name: "Alex Rivera", id: "123456" },
-      classes: [
+      classes:  [
         {
           name: "AP Calculus AB",
           section: "Period 1",
@@ -153,17 +156,17 @@
           assignments: [
             { name: "Essay Draft", score: 42, outOf: 50 },
             { name: "Reading Quiz", score: 9, outOf: 10 },
-            { name: "Presentation", score: 18, outOf: 20 }
+            { name: "Presentation", score:  18, outOf: 20 }
           ]
         },
         {
           name: "Physics",
           section: "Period 3",
-          teacher: "Dr. Chen",
+          teacher: "Dr.  Chen",
           credits: 1,
           grade: 78,
           assignments: [
-            { name: "Lab Report", score: 34, outOf: 50 },
+            { name: "Lab Report", score:  34, outOf: 50 },
             { name: "Homework Set 5", score: 14, outOf: 20 },
             { name: "Kinematics Quiz", score: 16, outOf: 20 }
           ]
@@ -171,7 +174,7 @@
         {
           name: "US History",
           section: "Period 4",
-          teacher: "Ms. Patel",
+          teacher: "Ms.  Patel",
           credits: 1,
           grade: 91,
           assignments: [
@@ -190,17 +193,75 @@
 
     function setStatus(msg) { statusEl.textContent = msg; }
 
-    // ---------- Mock login & fetch (replace with real API/proxy) ----------
-    async function mockLoginAndFetch({ studentNumber, password, domain }) {
-      return new Promise((resolve, reject) => {
-        setTimeout(() => {
-          if (!studentNumber || !password || !domain) {
-            return reject(new Error("All fields are required."));
-          }
-          // In a real implementation: send credentials securely to your backend proxy.
-          resolve(structuredClone(sampleData));
-        }, 700);
+    // ---------- Real API call to Vercel backend ----------
+    async function fetchRealGrades({ studentNumber, password, domain }) {
+      const resp = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain, username: studentNumber, password })
       });
+      
+      if (!resp.ok) {
+        const err = await resp.json();
+        throw new Error(err.error || 'Login failed');
+      }
+      
+      const result = await resp.json();
+      return parseStudentVueXML(result. data);
+    }
+
+    // ---------- Parse StudentVUE XML response ----------
+    function parseStudentVueXML(xmlString) {
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(xmlString, "text/xml");
+      
+      // Extract student info
+      const studentName = xmlDoc.querySelector("StudentInfo")?.getAttribute("StudentName") || "Student";
+      const studentId = xmlDoc.querySelector("StudentInfo")?.getAttribute("StudentNumber") || "";
+      
+      // Extract courses
+      const courses = Array.from(xmlDoc.querySelectorAll("Course")).map(course => {
+        const courseName = course. getAttribute("Title") || "Unknown Course";
+        const period = course.getAttribute("Period") || "";
+        const teacher = course.getAttribute("Staff") || "";
+        const room = course.getAttribute("Room") || "";
+        
+        // Get marks (grades)
+        const marks = course.querySelectorAll("Mark");
+        let grade = 0;
+        let assignments = [];
+        
+        if (marks.length > 0) {
+          const currentMark = marks[marks.length - 1]; // Get most recent marking period
+          const calculatedGrade = currentMark.getAttribute("CalculatedScoreString");
+          grade = parseFloat(calculatedGrade) || 0;
+          
+          // Extract assignments
+          const assignmentNodes = currentMark.querySelectorAll("Assignment");
+          assignments = Array.from(assignmentNodes).map(assign => {
+            return {
+              name: assign.getAttribute("Measure") || "Assignment",
+              score: parseFloat(assign.getAttribute("Points")?. split(" / ")[0]) || 0,
+              outOf: parseFloat(assign.getAttribute("Points")?.split(" / ")[1]) || 0
+            };
+          });
+        }
+        
+        return {
+          name: courseName,
+          section: period ?  `Period ${period}` : "N/A",
+          teacher:  teacher,
+          room: room,
+          credits: 1,
+          grade: Math.round(grade),
+          assignments: assignments
+        };
+      });
+      
+      return {
+        student: { name: studentName, id: studentId },
+        classes: courses
+      };
     }
 
     // ---------- Grade helpers ----------
@@ -225,16 +286,16 @@
     // ---------- Render ----------
     function renderClasses(data) {
       classesEl.innerHTML = "";
-      if (!data || !data.classes || !data.classes.length) {
-        classesEl.innerHTML = `<div class="muted">No classes to display.</div>`;
+      if (!data || !data.classes || ! data.classes.length) {
+        classesEl.innerHTML = `<div class="muted">No classes to display. </div>`;
         return;
       }
 
-      data.classes.forEach((cls, idx) => {
+      data.classes. forEach((cls, idx) => {
         const card = document.createElement("div");
         card.className = "class-card";
 
-        const currentGrade = computeGrade(cls.assignments);
+        const currentGrade = cls.grade || computeGrade(cls.assignments);
         cls.grade = currentGrade;
 
         card.innerHTML = `
@@ -242,18 +303,18 @@
             <div>
               <h3>${cls.name}</h3>
               <div class="meta">${cls.teacher} • ${cls.section}</div>
-              <div class="flex" style="flex-wrap: wrap; gap:8px;">
+              <div class="flex" style="flex-wrap: wrap; gap: 8px;">
                 <span class="tag grade">Grade: <strong>${currentGrade}%</strong></span>
                 <span class="tag section">${cls.section}</span>
                 <span class="tag credits">${cls.credits} cr</span>
               </div>
             </div>
-            <button class="btn secondary" style="padding:8px 10px;" data-class="${idx}">+ Hypothetical</button>
+            <button class="btn secondary" style="padding: 8px 10px;" data-class="${idx}">+ Hypothetical</button>
           </div>
           <div class="assignments" id="assignments-${idx}">
-            ${cls.assignments
+            ${cls.assignments. length > 0 ? cls.assignments
               .map(a => {
-                const pct = a.outOf ? Math.round((a.score / a.outOf) * 100) : 0;
+                const pct = a.outOf ?  Math.round((a.score / a.outOf) * 100) : 0;
                 return `
                 <div class="assignment-row">
                   <div>
@@ -263,9 +324,9 @@
                   <div class="assign-score ${scoreClass(pct)}">${pct}%</div>
                 </div>`;
               })
-              .join("")}
+              .join("") : '<div class="muted">No assignments found</div>'}
           </div>
-          <div class="hypo-form" data-form="${idx}" style="display:none;">
+          <div class="hypo-form" data-form="${idx}" style="display: none;">
             <div>
               <label>Assignment name</label>
               <input placeholder="e.g. Practice Quiz" data-field="name" />
@@ -280,7 +341,7 @@
             </div>
             <button class="btn" style="margin-top:4px;" data-add="${idx}">Add Hypothetical</button>
             <button class="btn secondary" style="margin-top:4px;" data-cancel="${idx}">Cancel</button>
-            <div class="muted" style="grid-column: 1 / -1;">This will not be saved—just a what-if calculation.</div>
+            <div class="muted" style="grid-column:  1 / -1;">This will not be saved—just a what-if calculation.</div>
           </div>
         `;
         classesEl.appendChild(card);
@@ -304,10 +365,10 @@
       });
 
       classesEl.querySelectorAll("button[data-add]").forEach(btn => {
-        btn.onclick = () => {
+        btn. onclick = () => {
           const idx = btn.getAttribute("data-add");
           const form = classesEl.querySelector(`.hypo-form[data-form="${idx}"]`);
-          const name = form.querySelector('[data-field="name"]').value.trim() || "What-if";
+          const name = form.querySelector('[data-field="name"]').value. trim() || "What-if";
           const score = parseFloat(form.querySelector('[data-field="score"]').value);
           const outOf = parseFloat(form.querySelector('[data-field="outOf"]').value);
 
@@ -322,23 +383,30 @@
 
           // Re-render class card portion only
           renderClasses(temp);
-          setStatus(`What-if added to ${temp.classes[idx].name}. New grade: ${temp.classes[idx].grade}%`);
+          setStatus(`What-if added to ${temp.classes[idx].name}.  New grade: ${temp.classes[idx].grade}%`);
         };
       });
     }
 
     // ---------- Actions ----------
     loginBtn.addEventListener("click", async () => {
-      const studentNumber = document.getElementById("studentNumber").value.trim();
+      const studentNumber = document.getElementById("studentNumber").value. trim();
       const password = document.getElementById("password").value;
       const domain = document.getElementById("domain").value.trim();
-      setStatus("Authenticating…");
+      
+      if (!studentNumber || !password || !domain) {
+        setStatus("All fields are required.");
+        return;
+      }
+      
+      setStatus("Authenticating with StudentVUE…");
       try {
-        const data = await mockLoginAndFetch({ studentNumber, password, domain });
-        setStatus(`Loaded grades for ${data.student.name} (${data.student.id}) from ${domain}`);
+        const data = await fetchRealGrades({ studentNumber, password, domain });
+        setStatus(`Loaded grades for ${data.student.name} (${data.student.id})`);
         renderClasses(data);
       } catch (e) {
         setStatus(e.message || "Login failed.");
+        console.error(e);
       }
     });
 
