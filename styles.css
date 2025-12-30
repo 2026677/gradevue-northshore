@@ -159,13 +159,14 @@ input:focus { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(79, 124, 2
 .detail-meta { color: var(--muted); font-size: 0.9rem }
 
 /* Category summary */
-.category-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; margin: 10px 0 }
+.category-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px; margin: 10px 0 }
 .category-pill {
   background: var(--bg-elev); border: 1px solid var(--border); border-radius: 10px; padding: 10px;
   display: flex; justify-content: space-between; align-items: center; gap: 8px;
 }
 .category-name { font-weight: 600 }
 .category-weight { color: var(--muted); font-size: 0.85rem }
+.category-earned { color: var(--text-2); font-size: 0.9rem; font-weight: 700 }
 .category-pct { font-weight: 800 }
 
 /* Assignments */
