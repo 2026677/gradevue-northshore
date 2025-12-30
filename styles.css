@@ -12,8 +12,8 @@
   --muted: #a3acc7;
   --accent: #4f7cff;
   --accent-2: #76a1ff;
-  --accent-glow: rgba(79, 124, 255, 0.35);
   --success: #16c784;
+  --neutral: #8b94b3;
   --warn: #f59e0b;
   --danger: #ef4444;
 
@@ -25,7 +25,7 @@
 html, body { height: 100% }
 body {
   margin: 0;
-  font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji';
+  font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
   color: var(--text);
   background:
     radial-gradient(1200px 600px at -10% 0%, rgba(79,124,255,0.07), transparent 50%),
@@ -33,7 +33,6 @@ body {
     var(--bg);
 }
 
-/* Layout */
 .container { max-width: 1100px; margin: 0 auto; padding: 28px 20px }
 .navbar {
   display: flex; justify-content: space-between; align-items: center;
@@ -47,7 +46,7 @@ body {
   width: 44px; height: 44px; border-radius: 12px;
   display: grid; place-items: center; font-weight: 800;
   color: white; background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  box-shadow: 0 8px 24px var(--accent-glow);
+  box-shadow: 0 8px 24px rgba(79,124,255,0.35);
 }
 .brand-text .title { font-size: 1.4rem; font-weight: 800; letter-spacing: -0.02em }
 .brand-text .subtitle { font-size: 0.9rem; color: var(--muted) }
@@ -90,6 +89,24 @@ input:focus { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(79, 124, 2
 .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 12px }
 .status { color: var(--muted); font-weight: 600 }
 
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; gap: 8px; white-space: nowrap;
+  padding: 12px 18px; border-radius: 12px; border: 2px solid transparent; cursor: pointer;
+  font-weight: 700; font-size: 0.95rem; transition: 140ms transform, 140ms box-shadow, 140ms background, 140ms border-color;
+}
+.btn-primary {
+  color: white; background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  box-shadow: 0 10px 24px rgba(79, 124, 255, 0.35);
+}
+.btn-primary:hover { transform: translateY(-1px) }
+.btn-primary:active { transform: translateY(0) }
+.btn-outline {
+  color: var(--text-2); background: transparent; border-color: var(--border);
+}
+.btn-outline:hover { border-color: var(--accent); color: var(--text) }
+.btn[disabled] { opacity: 0.6; cursor: not-allowed }
+
 /* Student header */
 .student-bar { display: flex; justify-content: space-between; align-items: center; gap: 14px }
 .student-ident { display: flex; align-items: center; gap: 12px }
@@ -103,6 +120,13 @@ input:focus { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(79, 124, 2
 .stat-label { color: var(--muted); font-size: 0.85rem }
 .stat-value { font-weight: 800 }
 
+/* Tools */
+.tools { display: flex; justify-content: space-between; align-items: center; margin: 10px 0 18px }
+.select-wrap { display: inline-flex; align-items: center; gap: 8px }
+.select-label { color: var(--muted); font-size: 0.9rem }
+.select { min-width: 240px; padding: 10px 12px; border-radius: 12px; background: var(--bg-soft); color: var(--text); border: 2px solid var(--border) }
+.select:disabled { opacity: 0.7 }
+
 /* Classes list */
 .class-list { display: flex; flex-direction: column; gap: 12px }
 .class-row {
@@ -113,17 +137,18 @@ input:focus { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(79, 124, 2
 }
 .class-row:hover { background: var(--row-alt); transform: translateY(-1px) }
 .class-title { font-weight: 800; letter-spacing: -0.02em }
-.class-right { display: flex; align-items: center; gap: 12px; min-width: 280px }
+.class-right { display: flex; align-items: center; gap: 12px; min-width: 300px }
 .grade-letter { font-weight: 800; color: var(--text-2) }
 .grade-percent { font-weight: 800 }
 .progress {
-  height: 8px; width: 180px; background: #2b334f; border-radius: 999px; overflow: hidden; position: relative;
+  height: 8px; width: 200px; background: #2b334f; border-radius: 999px; overflow: hidden; position: relative;
 }
 .progress-fill { height: 100%; width: 0%; background: var(--success); transition: width 200ms ease }
 .progress-trail { position: absolute; right: 4px; top: 0; bottom: 0; width: 8px; background: rgba(255,255,255,0.12); border-radius: 999px }
 
-/* Details panel */
+/* Details panel (full width inside row) */
 .class-details {
+  grid-column: 1 / -1;
   background: var(--bg-soft);
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -132,6 +157,18 @@ input:focus { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(79, 124, 2
 }
 .details-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px }
 .detail-meta { color: var(--muted); font-size: 0.9rem }
+
+/* Category summary */
+.category-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; margin: 10px 0 }
+.category-pill {
+  background: var(--bg-elev); border: 1px solid var(--border); border-radius: 10px; padding: 10px;
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+}
+.category-name { font-weight: 600 }
+.category-weight { color: var(--muted); font-size: 0.85rem }
+.category-pct { font-weight: 800 }
+
+/* Assignments */
 .assignments { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border) }
 .assignment {
   display: grid; grid-template-columns: 1fr auto; gap: 12px; padding: 10px;
@@ -143,16 +180,19 @@ input:focus { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(79, 124, 2
 .score-good { color: var(--success) }
 .score-warn { color: var(--warn) }
 .score-bad  { color: var(--danger) }
+.score-neutral { color: var(--neutral) }
 
+/* Hypo */
 .hypo-form { margin-top: 10px }
-.hypo-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 8px }
+.hypo-actions { display: flex; gap: 8px; align-items: center; margin-top: 8px }
+.hypo-toggle { display: inline-flex; align-items: center; gap: 8px; color: var(--text-2) }
+.hypo-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr auto; gap: 8px; margin-top: 8px }
 .hypo-grid input, .hypo-grid select {
   padding: 10px 12px; border-radius: 10px; background: var(--bg-elev);
   border: 2px solid var(--border); color: var(--text)
 }
-.hypo-actions { display: flex; gap: 8px; align-items: center; margin-top: 8px }
-.hypo-toggle { display: inline-flex; align-items: center; gap: 8px; color: var(--text-2) }
 
+/* Skeletons */
 .skeleton-row {
   height: 64px; border-radius: 14px; background:
     linear-gradient(90deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.12) 30%, rgba(255,255,255,0.06) 60%);
@@ -178,6 +218,6 @@ input:focus { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(79, 124, 2
 /* Responsive */
 @media (max-width: 768px) {
   .class-right { min-width: 0; width: 100%; }
-  .progress { width: 120px }
-  .hypo-grid { grid-template-columns: 1fr 1fr 1fr 1fr auto }
+  .progress { width: 140px }
+  .hypo-grid { grid-template-columns: 1fr 1fr 1fr 1fr 1fr auto }
 }
