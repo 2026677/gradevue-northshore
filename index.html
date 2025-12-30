@@ -653,8 +653,16 @@
       });
       
       if (!resp.ok) {
-        const err = await resp.json();
-        throw new Error(err.error || 'Login failed');
+        const errText = await resp.text();
+        console.error('API Error:', errText);
+        let errMsg = 'Login failed';
+        try {
+          const err = JSON.parse(errText);
+          errMsg = err.error || err.details || errMsg;
+        } catch (e) {
+          errMsg = errText;
+        }
+        throw new Error(errMsg);
       }
       
       const result = await resp.json();
