@@ -105,6 +105,10 @@ input:focus { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(79, 124, 2
   color: var(--text-2); background: transparent; border-color: var(--border);
 }
 .btn-outline:hover { border-color: var(--accent); color: var(--text) }
+.btn-danger {
+  color: white; background: var(--danger); border-color: var(--danger);
+}
+.btn-danger:hover { filter: brightness(1.05) }
 .btn[disabled] { opacity: 0.6; cursor: not-allowed }
 
 /* Student header */
@@ -126,6 +130,7 @@ input:focus { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(79, 124, 2
 .select-label { color: var(--muted); font-size: 0.9rem }
 .select { min-width: 240px; padding: 10px 12px; border-radius: 12px; background: var(--bg-soft); color: var(--text); border: 2px solid var(--border) }
 .select:disabled { opacity: 0.7 }
+.hypo-toggle { display: inline-flex; align-items: center; gap: 8px; color: var(--text-2) }
 
 /* Classes list */
 .class-list { display: flex; flex-direction: column; gap: 12px }
@@ -183,15 +188,15 @@ input:focus { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(79, 124, 2
 .score-bad  { color: var(--danger) }
 .score-neutral { color: var(--neutral) }
 
-/* Hypo */
+/* Hypothetical tools */
 .hypo-form { margin-top: 10px }
 .hypo-actions { display: flex; gap: 8px; align-items: center; margin-top: 8px }
-.hypo-toggle { display: inline-flex; align-items: center; gap: 8px; color: var(--text-2) }
-.hypo-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr auto; gap: 8px; margin-top: 8px }
+.hypo-grid { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 8px; margin-top: 8px }
 .hypo-grid input, .hypo-grid select {
   padding: 10px 12px; border-radius: 10px; background: var(--bg-elev);
   border: 2px solid var(--border); color: var(--text)
 }
+.hypo-delete { margin-left: 8px }
 
 /* Skeletons */
 .skeleton-row {
@@ -220,5 +225,5 @@ input:focus { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(79, 124, 2
 @media (max-width: 768px) {
   .class-right { min-width: 0; width: 100%; }
   .progress { width: 140px }
-  .hypo-grid { grid-template-columns: 1fr 1fr 1fr 1fr 1fr auto }
+  .hypo-grid { grid-template-columns: 1fr 1fr 1fr auto }
 }
