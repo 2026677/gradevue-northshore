@@ -7,7 +7,7 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
   
-  if (req.method !== 'POST') {
+  if (req. method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
@@ -22,7 +22,7 @@ export default async function handler(req, res) {
     
     const soapBody = `<?xml version="1.0" encoding="utf-8"?>
 <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-  <soap:Body>
+  <soap: Body>
     <ProcessWebServiceRequest xmlns="http://edupoint.com/webservices/">
       <userID>${username}</userID>
       <password>${password}</password>
@@ -37,7 +37,8 @@ export default async function handler(req, res) {
 
     const endpoint = `${cleanDomain}/Service/PXPCommunication.asmx`;
     
-    console.log('Calling endpoint:', endpoint);
+    console.log('=== CALLING ENDPOINT ===');
+    console.log(endpoint);
     
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -50,37 +51,25 @@ export default async function handler(req, res) {
 
     const xmlText = await response.text();
     
-    console.log('Response status:', response.status);
-    console.log('Response length:', xmlText.length);
-    console.log('Response preview:', xmlText.substring(0, 300));
+    console.log('=== RESPONSE STATUS ===');
+    console.log(response.status);
+    console.log('=== RESPONSE (first 1000 chars) ===');
+    console.log(xmlText. substring(0, 1000));
     
-    if (xmlText.includes('soap:Fault') || xmlText.includes('faultstring')) {
-      const faultMatch = xmlText.match(/<faultstring>(.*?)<\/faultstring>/);
-      throw new Error(faultMatch ? faultMatch[1] : 'SOAP fault');
-    }
-    
-    const resultMatch = xmlText.match(/<ProcessWebServiceRequestResult>([\s\S]*?)<\/ProcessWebServiceRequestResult>/);
-    
-    if (!resultMatch) {
-      console.error('No result found.  Response:', xmlText. substring(0, 500));
-      throw new Error('Invalid response structure');
-    }
-
-    const decodedData = resultMatch[1]
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&amp;/g, '&');
-
+    // Return everything for debugging
     return res.status(200).json({ 
-      success: true, 
-      data:  decodedData
+      debug: true,
+      endpoint:  endpoint,
+      status: response.status,
+      responsePreview: xmlText.substring(0, 2000),
+      data: xmlText
     });
 
   } catch (err) {
-    console.error('API Error:', err. message);
+    console.error('=== ERROR ===');
+    console.error(err. message);
     return res.status(500).json({ 
-      error: 'Login failed', 
+      error: 'Request failed', 
       details: err.message 
     });
   }
