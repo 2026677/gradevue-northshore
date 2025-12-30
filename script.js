@@ -23,13 +23,11 @@ const domainInput = document.getElementById('domain');
 let currentData = null;
 
 // ---------- Utils ----------
-function setStatus(msg, icon = '⏳') {
-  statusEl.textContent = `${icon} ${msg}`;
-}
+function setStatus(msg) { statusEl.textContent = msg; }
 function toast(message, type = 'success') {
   const el = document.createElement('div');
   el.className = `toast toast-${type}`;
-  el.innerHTML = `<span class="toast-icon">${type === 'success' ? '✅' : '❌'}</span><span>${message}</span><button class="toast-close">✖</button>`;
+  el.innerHTML = `<span>${message}</span><button class="toast-close">Close</button>`;
   el.querySelector('.toast-close').onclick = () => el.remove();
   toastHost.appendChild(el);
   setTimeout(() => el.remove(), 5000);
@@ -53,12 +51,12 @@ function validateDomain(url) {
     return /edupoint\.com$/i.test(u.hostname);
   } catch { return false; }
 }
-function gradeLetter(grade) {
-  if (grade === 0) return 'N/A';
-  if (grade >= 90) return 'A';
-  if (grade >= 80) return 'B';
-  if (grade >= 70) return 'C';
-  if (grade >= 60) return 'D';
+function gradeLetter(gradeNum) {
+  if (gradeNum === null) return 'N/A';
+  if (gradeNum >= 90) return 'A';
+  if (gradeNum >= 80) return 'B';
+  if (gradeNum >= 70) return 'C';
+  if (gradeNum >= 60) return 'D';
   return 'F';
 }
 function scoreClass(pct) {
@@ -66,13 +64,23 @@ function scoreClass(pct) {
   if (pct >= 80) return 'score-warn';
   return 'score-bad';
 }
-function computeGrade(assignments) {
+function parseDate(str) {
+  if (!str) return '';
+  const d = new Date(str);
+  if (isNaN(d.getTime())) return str; // fallback if not ISO
+  // Show MM/DD/YYYY
+  return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}/${d.getFullYear()}`;
+}
+function computeGradeFromAssignments(assignments) {
   const totals = assignments.reduce((acc, a) => {
-    acc.earned += Number(a.score) || 0;
-    acc.possible += Number(a.outOf) || 0;
+    const earned = Number(a.score) || 0;
+    const possible = Number(a.outOf) || 0;
+    acc.earned += earned;
+    acc.possible += possible;
     return acc;
   }, { earned: 0, possible: 0 });
-  return totals.possible ? Math.round((totals.earned / totals.possible) * 100) : 0;
+  if (!totals.possible) return null;
+  return (totals.earned / totals.possible) * 100;
 }
 
 // ---------- API ----------
@@ -114,8 +122,10 @@ function parseStudentVueXML(xmlString) {
   }
 
   const studentInfo = xmlDoc.querySelector('StudentInfo');
-  const studentName = studentInfo?.getAttribute('StudentName') || 'Student';
-  const studentId = studentInfo?.getAttribute('StudentNumber') || '';
+  // Fallback to login inputs if StudentInfo missing
+  const fallbackName = studentNumberInput.value ? `Student ${studentNumberInput.value}` : 'Student';
+  const studentName = studentInfo?.getAttribute('StudentName') || fallbackName;
+  const studentId = studentInfo?.getAttribute('StudentNumber') || studentNumberInput.value || '';
 
   const courseNodes = xmlDoc.querySelectorAll('Course');
   const classes = Array.from(courseNodes).map(course => {
@@ -124,34 +134,70 @@ function parseStudentVueXML(xmlString) {
     const teacher = course.getAttribute('Staff') || '';
     const marks = course.querySelectorAll('Mark');
 
-    let grade = 0;
-    let assignments = [];
+    // Select current mark (last)
+    const currentMark = marks.length ? marks[marks.length - 1] : null;
 
-    if (marks.length > 0) {
-      const currentMark = marks[marks.length - 1];
-      const calculatedGrade = currentMark.getAttribute('CalculatedScoreString');
-      grade = Math.round(parseFloat(calculatedGrade) || 0);
+    // Most precise decimal available from StudentVUE
+    const gradeStrRaw = currentMark?.getAttribute('CalculatedScoreString') || '';
+    const gradeNum = gradeStrRaw && !isNaN(parseFloat(gradeStrRaw))
+      ? parseFloat(gradeStrRaw)
+      : null;
 
-      const assignmentNodes = currentMark.querySelectorAll('Assignment');
-      assignments = Array.from(assignmentNodes).map(assign => {
-        const pointsStr = assign.getAttribute('Points') || '0 / 0';
-        const [score, outOf] = pointsStr.split(' / ').map(p => parseFloat(p) || 0);
-        return {
-          name: assign.getAttribute('Measure') || 'Assignment',
-          score, outOf
-        };
-      });
-    }
+    // Assignments with category + due date
+    const assignmentNodes = currentMark ? currentMark.querySelectorAll('Assignment') : [];
+    const assignments = Array.from(assignmentNodes).map(assign => {
+      // Points can be "x / y" OR separate attributes
+      const pointsStr = assign.getAttribute('Points') || '';
+      let score = NaN;
+      let outOf = NaN;
+      if (pointsStr.includes('/')) {
+        const [s, o] = pointsStr.split('/').map(p => parseFloat(p.trim()));
+        score = isNaN(s) ? 0 : s;
+        outOf = isNaN(o) ? 0 : o;
+      } else {
+        // Fallback attributes commonly present
+        const s = parseFloat(assign.getAttribute('Score') || assign.getAttribute('PointsEarned') || '0');
+        const o = parseFloat(assign.getAttribute('MaxScore') || assign.getAttribute('PointsPossible') || '0');
+        score = isNaN(s) ? 0 : s;
+        outOf = isNaN(o) ? 0 : o;
+      }
 
-    if (!grade) grade = computeGrade(assignments);
+      // Category & due date (support multiple possible attribute names)
+      const category =
+        assign.getAttribute('Type') ||
+        assign.getAttribute('Category') ||
+        assign.getAttribute('Group') ||
+        assign.getAttribute('ScoreType') ||
+        '';
+
+      const dueDateRaw =
+        assign.getAttribute('DateDue') ||
+        assign.getAttribute('DueDate') ||
+        assign.getAttribute('AssignedDate') ||
+        '';
+
+      const pct = outOf ? (score / outOf) * 100 : 0;
+
+      return {
+        name: assign.getAttribute('Measure') || 'Assignment',
+        category,
+        dueDate: parseDate(dueDateRaw),
+        score,
+        outOf,
+        pct
+      };
+    });
 
     return {
       name,
       section: period ? `Period ${period}` : 'N/A',
       teacher,
       credits: 1,
-      grade,
-      assignments
+      gradeStr: gradeStrRaw,   // string from StudentVUE
+      gradeNum,                // numeric, null if N/A
+      assignments,
+      hypoAssignments: [],     // user-added
+      hypoMode: false          // per-class toggle
     };
   });
 
@@ -163,12 +209,15 @@ function renderStudentHeader(data) {
   studentNameEl.textContent = data.student.name || 'Student';
   studentIdEl.textContent = data.student.id ? `ID ${data.student.id}` : 'ID —';
   statClassesEl.textContent = data.classes.length.toString();
-  const allAssignments = data.classes.reduce((acc, c) => acc + c.assignments.length, 0);
+  const allAssignments = data.classes.reduce((acc, c) => acc + c.assignments.length + c.hypoAssignments.length, 0);
   statAssignmentsEl.textContent = allAssignments.toString();
-  const avg = data.classes.length
-    ? Math.round(data.classes.reduce((acc, c) => acc + (c.grade || 0), 0) / data.classes.length)
-    : 0;
-  statAvgEl.textContent = data.classes.length ? `${avg}%` : '—';
+
+  // Average excludes N/A grades
+  const graded = data.classes.filter(c => c.gradeNum !== null);
+  const avg = graded.length
+    ? graded.reduce((acc, c) => acc + c.gradeNum, 0) / graded.length
+    : null;
+  statAvgEl.textContent = avg === null ? '—' : `${avg.toFixed(2)}%`;
 }
 
 function renderClassList(data) {
@@ -176,7 +225,7 @@ function renderClassList(data) {
     classListEl.innerHTML = `
       <div class="class-row">
         <div class="class-title">No classes found</div>
-        <div class="class-right"><span class="grade-letter">N/A</span><span class="grade-percent">0%</span>
+        <div class="class-right"><span class="grade-letter">N/A</span><span class="grade-percent">—</span>
           <div class="progress"><div class="progress-fill" style="width:0%"></div><div class="progress-trail"></div></div>
         </div>
       </div>
@@ -185,8 +234,52 @@ function renderClassList(data) {
   }
 
   classListEl.innerHTML = data.classes.map((cls, idx) => {
-    const pct = cls.grade || 0;
-    const letter = gradeLetter(pct);
+    // Decide displayed grade: either precise StudentVUE grade or hypothetical computed
+    let displayGradeStr = '—';
+    let displayGradeNum = null;
+
+    if (cls.hypoMode) {
+      const combined = [...cls.assignments, ...cls.hypoAssignments];
+      const hypo = computeGradeFromAssignments(combined);
+      if (hypo === null) {
+        // No possible points: fall back to original if present
+        displayGradeNum = cls.gradeNum;
+        displayGradeStr = cls.gradeNum === null ? '—' : cls.gradeNum.toFixed(2) + '%';
+      } else {
+        displayGradeNum = hypo;
+        displayGradeStr = hypo.toFixed(2) + '%';
+      }
+    } else {
+      if (cls.gradeNum === null) {
+        displayGradeNum = null;
+        displayGradeStr = '—';
+      } else {
+        displayGradeNum = cls.gradeNum;
+        // Most precise decimal available (use original string if present)
+        displayGradeStr = cls.gradeStr ? `${cls.gradeStr}%` : `${cls.gradeNum.toFixed(2)}%`;
+      }
+    }
+
+    const letter = gradeLetter(displayGradeNum);
+    const barWidth = displayGradeNum === null ? 0 : Math.max(0, Math.min(100, displayGradeNum));
+
+    const assignmentsHtml = [...cls.assignments, ...cls.hypoAssignments].map(a => {
+      const pct = a.outOf ? (a.score / a.outOf) * 100 : 0;
+      return `
+        <div class="assignment">
+          <div>
+            <div class="assignment-name">${escapeHtml(a.name)}</div>
+            <div class="assignment-meta">
+              ${escapeHtml(a.category || 'Uncategorized')}
+              ${a.dueDate ? ' • Due ' + escapeHtml(a.dueDate) : ''}
+              • ${a.score} / ${a.outOf} points
+            </div>
+          </div>
+          <div class="assignment-score ${scoreClass(pct)}">${pct.toFixed(1)}%</div>
+        </div>
+      `;
+    }).join('');
+
     return `
       <div class="class-row" onclick="toggleDetails(${idx})">
         <div>
@@ -194,9 +287,9 @@ function renderClassList(data) {
         </div>
         <div class="class-right">
           <span class="grade-letter">${letter}</span>
-          <span class="grade-percent">${pct}%</span>
+          <span class="grade-percent">${displayGradeStr}</span>
           <div class="progress">
-            <div class="progress-fill" style="width:${Math.min(100, Math.max(0, pct))}%"></div>
+            <div class="progress-fill" style="width:${barWidth}%"></div>
             <div class="progress-trail"></div>
           </div>
         </div>
@@ -208,27 +301,32 @@ function renderClassList(data) {
 
           <div class="assignments">
             <div class="assignment-list">
-              ${cls.assignments.length ? cls.assignments.map(a => {
-                const apct = a.outOf ? Math.round((a.score / a.outOf) * 100) : 0;
-                return `
-                  <div class="assignment">
-                    <div>
-                      <div class="assignment-name">${escapeHtml(a.name)}</div>
-                      <div class="assignment-points">${a.score} / ${a.outOf} points</div>
-                    </div>
-                    <div class="assignment-score ${scoreClass(apct)}">${apct}%</div>
-                  </div>
-                `;
-              }).join('') : `<div class="assignment"><div><div class="assignment-name">No assignments yet</div></div></div>`}
+              ${assignmentsHtml || `<div class="assignment"><div><div class="assignment-name">No assignments yet</div></div></div>`}
             </div>
           </div>
 
           <div class="hypo-form">
+            <div class="hypo-actions">
+              <label class="hypo-toggle">
+                <input type="checkbox" ${cls.hypoMode ? 'checked' : ''} onchange="toggleHypoMode(${idx}, this.checked)" />
+                Hypothetical mode
+              </label>
+            </div>
             <div class="hypo-grid">
               <input id="hypo-name-${idx}" placeholder="Assignment name" />
+              <select id="hypo-cat-${idx}">
+                <option value="">Uncategorized</option>
+                <option>Homework</option>
+                <option>Quiz</option>
+                <option>Test</option>
+                <option>Project</option>
+              </select>
+              <input id="hypo-date-${idx}" type="date" />
               <input id="hypo-score-${idx}" type="number" min="0" step="0.1" placeholder="Score" />
               <input id="hypo-outof-${idx}" type="number" min="0" step="0.1" placeholder="Out of" />
-              <button class="btn btn-primary" onclick="addHypo(${idx})">🧮 What‑If</button>
+            </div>
+            <div class="hypo-actions">
+              <button class="btn btn-primary" onclick="addHypo(${idx})">Add hypothetical</button>
             </div>
           </div>
         </div>
@@ -243,8 +341,16 @@ window.toggleDetails = (idx) => {
   if (el) el.classList.toggle('hidden');
 };
 
+window.toggleHypoMode = (idx, checked) => {
+  currentData.classes[idx].hypoMode = checked;
+  renderStudentHeader(currentData);
+  renderClassList(currentData);
+};
+
 window.addHypo = (idx) => {
-  const name = document.getElementById(`hypo-name-${idx}`).value.trim() || 'What‑If Assignment';
+  const name = document.getElementById(`hypo-name-${idx}`).value.trim() || 'Hypothetical Assignment';
+  const category = document.getElementById(`hypo-cat-${idx}`).value || '';
+  const dueDateRaw = document.getElementById(`hypo-date-${idx}`).value;
   const score = parseFloat(document.getElementById(`hypo-score-${idx}`).value);
   const outOf = parseFloat(document.getElementById(`hypo-outof-${idx}`).value);
 
@@ -253,16 +359,19 @@ window.addHypo = (idx) => {
     return;
   }
 
-  const temp = structuredClone(currentData);
-  temp.classes[idx].assignments.push({ name, score, outOf });
-  temp.classes[idx].grade = computeGrade(temp.classes[idx].assignments);
+  currentData.classes[idx].hypoAssignments.push({
+    name, category, dueDate: parseDate(dueDateRaw), score, outOf
+  });
 
-  currentData = temp;
   renderStudentHeader(currentData);
   renderClassList(currentData);
-  toggleDetails(idx);
-  toggleDetails(idx);
-  toast(`New grade for ${temp.classes[idx].name}: ${temp.classes[idx].grade}%`, 'success');
+  // Keep details open and re-render it
+  setTimeout(() => {
+    const el = document.getElementById(`details-${idx}`);
+    if (el && el.classList.contains('hidden')) el.classList.remove('hidden');
+  }, 0);
+
+  toast('Hypothetical assignment added', 'success');
 };
 
 // ---------- Form handling ----------
@@ -273,24 +382,24 @@ loginForm.addEventListener('submit', async (e) => {
   const domain = domainInput.value.trim();
 
   if (!studentNumber || !password || !domain) {
-    setStatus('All fields are required', '⚠️');
+    setStatus('All fields are required');
     toast('All fields are required', 'error');
     return;
   }
   if (!validateDomain(domain)) {
-    setStatus('Domain must be edupoint.com', '⚠️');
+    setStatus('Domain must be edupoint.com');
     toast('Domain must be an edupoint.com host', 'error');
     return;
   }
 
   loginBtn.disabled = true;
-  setStatus('Authenticating with StudentVUE…', '🔄');
+  setStatus('Authenticating with StudentVUE…');
 
   try {
     const data = await fetchRealGrades({ studentNumber, password, domain });
     currentData = data;
     persistInputs();
-    setStatus(`Loaded grades for ${data.student.name} (${data.student.id || 'ID —'})`, '✅');
+    setStatus(`Loaded grades for ${data.student.name} (${data.student.id || 'ID —'})`);
     toast('Grades loaded successfully', 'success');
 
     studentHeader.classList.remove('hidden');
@@ -298,7 +407,7 @@ loginForm.addEventListener('submit', async (e) => {
     renderClassList(currentData);
   } catch (err) {
     console.error(err);
-    setStatus(err.message || 'Login failed', '❌');
+    setStatus(err.message || 'Login failed');
     toast(err.message || 'Login failed', 'error');
   } finally {
     loginBtn.disabled = false;
@@ -307,4 +416,3 @@ loginForm.addEventListener('submit', async (e) => {
 
 // ---------- Init ----------
 restoreInputs();
-// skeleton remains until data loads
