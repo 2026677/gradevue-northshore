@@ -666,6 +666,8 @@
       }
       
       const result = await resp.json();
+      const xmlPayload = result.data || result.raw || '';
+      return parseStudentVueXML(xmlPayload);
       console.log('API Response:', result);
       
       // The backend now returns raw XML in result.data
