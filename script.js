@@ -9,6 +9,10 @@ const classListEl = document.getElementById('classList');
 const toastHost = document.getElementById('toastHost');
 
 const studentHeader = document.getElementById('studentHeader');
+const toolsBar = document.getElementById('toolsBar');
+const periodSelect = document.getElementById('periodSelect');
+const refreshBtn = document.getElementById('refreshBtn');
+
 const studentNameEl = document.getElementById('studentName');
 const studentIdEl = document.getElementById('studentId');
 const statClassesEl = document.getElementById('statClasses');
@@ -21,6 +25,8 @@ const domainInput = document.getElementById('domain');
 
 // ---------- State ----------
 let currentData = null;
+let currentPeriod = '';
+let childIntID = '0';
 
 // ---------- Utils ----------
 function setStatus(msg) { statusEl.textContent = msg; }
@@ -51,47 +57,71 @@ function validateDomain(url) {
     return /edupoint\.com$/i.test(u.hostname);
   } catch { return false; }
 }
-function gradeLetter(gradeNum) {
-  if (gradeNum === null) return 'N/A';
-  if (gradeNum >= 90) return 'A';
-  if (gradeNum >= 80) return 'B';
-  if (gradeNum >= 70) return 'C';
-  if (gradeNum >= 60) return 'D';
+function gradeLetter(num) {
+  if (num === null) return 'N/A';
+  if (num >= 90) return 'A';
+  if (num >= 80) return 'B';
+  if (num >= 70) return 'C';
+  if (num >= 60) return 'D';
   return 'F';
-}
-function scoreClass(pct) {
-  if (pct >= 90) return 'score-good';
-  if (pct >= 80) return 'score-warn';
-  return 'score-bad';
 }
 function parseDate(str) {
   if (!str) return '';
   const d = new Date(str);
-  if (isNaN(d.getTime())) return str; // fallback if not ISO
-  // Show MM/DD/YYYY
+  if (isNaN(d.getTime())) return str;
   return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}/${d.getFullYear()}`;
 }
-function computeGradeFromAssignments(assignments) {
-  const totals = assignments.reduce((acc, a) => {
-    const earned = Number(a.score) || 0;
-    const possible = Number(a.outOf) || 0;
-    acc.earned += earned;
-    acc.possible += possible;
-    return acc;
-  }, { earned: 0, possible: 0 });
-  if (!totals.possible) return null;
-  return (totals.earned / totals.possible) * 100;
+function isGraded(a) {
+  // Not graded if possible points missing or zero, or explicit flag/labels
+  if (!a || a.outOf === 0 || a.outOf === null || a.outOf === undefined) return false;
+  const scoreStr = String(a.score ?? '');
+  const measureStr = String(a.name ?? '');
+  return !(scoreStr.toLowerCase().includes('not graded') || measureStr.toLowerCase().includes('not graded'));
+}
+function computeCategoryPerc(assignments) {
+  // Returns map: { category: { earned, possible, pct } } excluding non-graded
+  const cat = {};
+  for (const a of assignments) {
+    if (!isGraded(a)) continue;
+    const k = a.category || 'Uncategorized';
+    if (!cat[k]) cat[k] = { earned: 0, possible: 0, pct: 0 };
+    cat[k].earned += Number(a.score) || 0;
+    cat[k].possible += Number(a.outOf) || 0;
+  }
+  for (const k in cat) {
+    cat[k].pct = cat[k].possible ? (cat[k].earned / cat[k].possible) * 100 : 0;
+  }
+  return cat;
+}
+function computeWeightedGrade(categoryPerc, weights) {
+  // weights: { category: weightNumber } in percent or fraction
+  let totalWeight = 0;
+  let sum = 0;
+  for (const k of Object.keys(categoryPerc)) {
+    const w = (weights[k] ?? weights[k.toLowerCase()] ?? 0);
+    const pct = categoryPerc[k].pct;
+    if (w > 0 && categoryPerc[k].possible > 0) {
+      sum += pct * w;
+      totalWeight += w;
+    }
+  }
+  if (!totalWeight) return null; // N/A
+  // If weights are percentages (e.g., 20, 30), normalize
+  if (totalWeight > 1.001) {
+    return sum / totalWeight;
+  }
+  // If weights are fractions (sum ~1), sum already weighted
+  return sum;
 }
 
 // ---------- API ----------
-async function fetchRealGrades({ studentNumber, password, domain }) {
-  const body = { domain, username: studentNumber, password };
+async function fetchGradebook({ studentNumber, password, domain, reportPeriod = '', childInt = '0' }) {
+  const body = { domain, username: studentNumber, password, reportPeriod, childIntID: childInt };
   const resp = await fetch(API_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   });
-
   if (!resp.ok) {
     const errText = await resp.text();
     let errMsg = 'Login failed';
@@ -103,9 +133,8 @@ async function fetchRealGrades({ studentNumber, password, domain }) {
     }
     throw new Error(errMsg);
   }
-
   const result = await resp.json();
-  return parseStudentVueXML(result.data || '');
+  return result.data || '';
 }
 
 // ---------- XML Parser ----------
@@ -115,54 +144,69 @@ function parseStudentVueXML(xmlString) {
   }
   const parser = new DOMParser();
   const xmlDoc = parser.parseFromString(xmlString, 'text/xml');
-
   const parseError = xmlDoc.querySelector('parsererror');
-  if (parseError) {
-    throw new Error('Invalid XML response');
-  }
+  if (parseError) throw new Error('Invalid XML response');
 
+  // Student info
   const studentInfo = xmlDoc.querySelector('StudentInfo');
-  // Fallback to login inputs if StudentInfo missing
-  const fallbackName = studentNumberInput.value ? `Student ${studentNumberInput.value}` : 'Student';
-  const studentName = studentInfo?.getAttribute('StudentName') || fallbackName;
+  const studentName = studentInfo?.getAttribute('StudentName') || (studentNumberInput.value ? `Student ${studentNumberInput.value}` : 'Student');
   const studentId = studentInfo?.getAttribute('StudentNumber') || studentNumberInput.value || '';
+  childIntID = studentInfo?.getAttribute('ChildIntID') || childIntID;
 
+  // Report periods list (try multiple structures)
+  const reportPeriods = [];
+  xmlDoc.querySelectorAll('ReportPeriod').forEach(rp => {
+    const name = rp.getAttribute('Name') || rp.textContent || '';
+    if (name) reportPeriods.push(name);
+  });
+  if (reportPeriods.length === 0) {
+    xmlDoc.querySelectorAll('Mark').forEach(m => {
+      const name = m.getAttribute('MarkName') || m.getAttribute('MarkCalc') || '';
+      if (name) reportPeriods.push(name);
+    });
+  }
+  const uniquePeriods = [...new Set(reportPeriods)];
+
+  // Courses
   const courseNodes = xmlDoc.querySelectorAll('Course');
   const classes = Array.from(courseNodes).map(course => {
     const name = course.getAttribute('Title') || 'Unknown Course';
     const period = course.getAttribute('Period') || '';
     const teacher = course.getAttribute('Staff') || '';
     const marks = course.querySelectorAll('Mark');
-
-    // Select current mark (last)
     const currentMark = marks.length ? marks[marks.length - 1] : null;
 
-    // Most precise decimal available from StudentVUE
-    const gradeStrRaw = currentMark?.getAttribute('CalculatedScoreString') || '';
-    const gradeNum = gradeStrRaw && !isNaN(parseFloat(gradeStrRaw))
-      ? parseFloat(gradeStrRaw)
-      : null;
+    // Category weights
+    const weights = {};
+    currentMark?.querySelectorAll('AssignmentType, Category').forEach(node => {
+      const typeName = node.getAttribute('Type') || node.getAttribute('Name') || '';
+      const weightRaw = node.getAttribute('Weight') || node.getAttribute('PointsPossibleWeight') || node.textContent || '';
+      const w = parseFloat(String(weightRaw).replace('%','').trim());
+      if (typeName && !isNaN(w)) {
+        weights[typeName] = w;
+      }
+    });
 
-    // Assignments with category + due date
+    // Most precise decimal from StudentVUE
+    const gradeStrRaw = currentMark?.getAttribute('CalculatedScoreString') || '';
+    const gradeNum = gradeStrRaw && !isNaN(parseFloat(gradeStrRaw)) ? parseFloat(gradeStrRaw) : null;
+
+    // Assignments (with category + dates)
     const assignmentNodes = currentMark ? currentMark.querySelectorAll('Assignment') : [];
     const assignments = Array.from(assignmentNodes).map(assign => {
-      // Points can be "x / y" OR separate attributes
       const pointsStr = assign.getAttribute('Points') || '';
-      let score = NaN;
-      let outOf = NaN;
+      let score = NaN, outOf = NaN;
       if (pointsStr.includes('/')) {
         const [s, o] = pointsStr.split('/').map(p => parseFloat(p.trim()));
         score = isNaN(s) ? 0 : s;
         outOf = isNaN(o) ? 0 : o;
       } else {
-        // Fallback attributes commonly present
         const s = parseFloat(assign.getAttribute('Score') || assign.getAttribute('PointsEarned') || '0');
         const o = parseFloat(assign.getAttribute('MaxScore') || assign.getAttribute('PointsPossible') || '0');
         score = isNaN(s) ? 0 : s;
         outOf = isNaN(o) ? 0 : o;
       }
 
-      // Category & due date (support multiple possible attribute names)
       const category =
         assign.getAttribute('Type') ||
         assign.getAttribute('Category') ||
@@ -176,7 +220,8 @@ function parseStudentVueXML(xmlString) {
         assign.getAttribute('AssignedDate') ||
         '';
 
-      const pct = outOf ? (score / outOf) * 100 : 0;
+      const graded = isGraded({ score, outOf, name: assign.getAttribute('Measure') || '' });
+      const pct = graded && outOf ? (score / outOf) * 100 : null;
 
       return {
         name: assign.getAttribute('Measure') || 'Assignment',
@@ -184,24 +229,30 @@ function parseStudentVueXML(xmlString) {
         dueDate: parseDate(dueDateRaw),
         score,
         outOf,
+        graded,
         pct
       };
     });
+
+    // Category grade map
+    const categoryPerc = computeCategoryPerc(assignments);
 
     return {
       name,
       section: period ? `Period ${period}` : 'N/A',
       teacher,
       credits: 1,
-      gradeStr: gradeStrRaw,   // string from StudentVUE
-      gradeNum,                // numeric, null if N/A
+      gradeStr: gradeStrRaw,
+      gradeNum,       // null if N/A
       assignments,
-      hypoAssignments: [],     // user-added
-      hypoMode: false          // per-class toggle
+      categoryPerc,   // {cat:{earned,possible,pct}}
+      weights,        // {cat: weight}
+      hypoAssignments: [],
+      hypoMode: false
     };
   });
 
-  return { student: { name: studentName, id: studentId }, classes };
+  return { student: { name: studentName, id: studentId }, classes, periods: uniquePeriods };
 }
 
 // ---------- Render ----------
@@ -212,12 +263,18 @@ function renderStudentHeader(data) {
   const allAssignments = data.classes.reduce((acc, c) => acc + c.assignments.length + c.hypoAssignments.length, 0);
   statAssignmentsEl.textContent = allAssignments.toString();
 
-  // Average excludes N/A grades
+  // Average excludes N/A
   const graded = data.classes.filter(c => c.gradeNum !== null);
-  const avg = graded.length
-    ? graded.reduce((acc, c) => acc + c.gradeNum, 0) / graded.length
-    : null;
+  const avg = graded.length ? graded.reduce((acc, c) => acc + c.gradeNum, 0) / graded.length : null;
   statAvgEl.textContent = avg === null ? '—' : `${avg.toFixed(2)}%`;
+}
+
+function renderPeriods(periods) {
+  toolsBar.classList.remove('hidden');
+  periodSelect.innerHTML = periods.length ? periods.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('') : '<option>No periods</option>';
+  periodSelect.disabled = !periods.length;
+  if (!currentPeriod && periods.length) currentPeriod = periods[0];
+  if (currentPeriod) periodSelect.value = currentPeriod;
 }
 
 function renderClassList(data) {
@@ -234,37 +291,55 @@ function renderClassList(data) {
   }
 
   classListEl.innerHTML = data.classes.map((cls, idx) => {
-    // Decide displayed grade: either precise StudentVUE grade or hypothetical computed
-    let displayGradeStr = '—';
+    // Display grade only when hypothetical mode is enabled; otherwise hide
     let displayGradeNum = null;
+    let displayGradeStr = '—';
 
     if (cls.hypoMode) {
       const combined = [...cls.assignments, ...cls.hypoAssignments];
-      const hypo = computeGradeFromAssignments(combined);
-      if (hypo === null) {
-        // No possible points: fall back to original if present
-        displayGradeNum = cls.gradeNum;
-        displayGradeStr = cls.gradeNum === null ? '—' : cls.gradeNum.toFixed(2) + '%';
-      } else {
-        displayGradeNum = hypo;
-        displayGradeStr = hypo.toFixed(2) + '%';
-      }
-    } else {
-      if (cls.gradeNum === null) {
+      const catPerc = computeCategoryPerc(combined);
+      const hypoWeighted = computeWeightedGrade(catPerc, cls.weights);
+      if (hypoWeighted === null) {
         displayGradeNum = null;
         displayGradeStr = '—';
       } else {
-        displayGradeNum = cls.gradeNum;
-        // Most precise decimal available (use original string if present)
-        displayGradeStr = cls.gradeStr ? `${cls.gradeStr}%` : `${cls.gradeNum.toFixed(2)}%`;
+        displayGradeNum = hypoWeighted;
+        displayGradeStr = `${hypoWeighted.toFixed(2)}%`;
       }
     }
 
     const letter = gradeLetter(displayGradeNum);
     const barWidth = displayGradeNum === null ? 0 : Math.max(0, Math.min(100, displayGradeNum));
 
+    // Category pills (show to nearest tenth; weight display if available)
+    const categoriesHtml = (() => {
+      const allCategories = new Set([
+        ...Object.keys(cls.categoryPerc || {}),
+        ...Object.keys(cls.weights || {})
+      ]);
+      return Array.from(allCategories).map(cat => {
+        const pctObj = cls.hypoMode
+          ? computeCategoryPerc([...cls.assignments, ...cls.hypoAssignments])[cat]
+          : cls.categoryPerc[cat];
+        const pct = pctObj ? pctObj.pct : null;
+        const weight = cls.weights[cat];
+        return `
+          <div class="category-pill">
+            <span class="category-name">${escapeHtml(cat || 'Uncategorized')}</span>
+            <span class="category-weight">${weight ? `Weight ${weight}${weight <= 1.001 ? '' : '%'}` : 'Weight —'}</span>
+            <span class="category-pct">${pct === null || isNaN(pct) ? '—' : `${pct.toFixed(1)}%`}</span>
+          </div>
+        `;
+      }).join('');
+    })();
+
     const assignmentsHtml = [...cls.assignments, ...cls.hypoAssignments].map(a => {
-      const pct = a.outOf ? (a.score / a.outOf) * 100 : 0;
+      const pct = a.pct;
+      const scoreClass =
+        pct === null || isNaN(pct) ? 'score-neutral' :
+        pct >= 90 ? 'score-good' :
+        pct >= 80 ? 'score-warn' : 'score-bad';
+      const pctStr = pct === null || isNaN(pct) ? 'Not graded' : `${pct.toFixed(1)}%`;
       return `
         <div class="assignment">
           <div>
@@ -272,10 +347,10 @@ function renderClassList(data) {
             <div class="assignment-meta">
               ${escapeHtml(a.category || 'Uncategorized')}
               ${a.dueDate ? ' • Due ' + escapeHtml(a.dueDate) : ''}
-              • ${a.score} / ${a.outOf} points
+              • ${a.outOf ? `${a.score} / ${a.outOf} points` : 'No points'}
             </div>
           </div>
-          <div class="assignment-score ${scoreClass(pct)}">${pct.toFixed(1)}%</div>
+          <div class="assignment-score ${scoreClass}">${pctStr}</div>
         </div>
       `;
     }).join('');
@@ -293,15 +368,20 @@ function renderClassList(data) {
             <div class="progress-trail"></div>
           </div>
         </div>
+
         <div id="details-${idx}" class="class-details hidden" onclick="event.stopPropagation()">
           <div class="details-head">
             <div class="detail-meta">${escapeHtml(cls.teacher)} • ${escapeHtml(cls.section)} • ${cls.credits} credit</div>
-            <button class="btn" onclick="toggleDetails(${idx})">Close</button>
+            <button class="btn btn-outline" onclick="toggleDetails(${idx})">Close</button>
+          </div>
+
+          <div class="category-list">
+            ${categoriesHtml || '<div class="category-pill"><span class="category-name">No categories</span><span class="category-weight">Weight —</span><span class="category-pct">—</span></div>'}
           </div>
 
           <div class="assignments">
             <div class="assignment-list">
-              ${assignmentsHtml || `<div class="assignment"><div><div class="assignment-name">No assignments yet</div></div></div>`}
+              ${assignmentsHtml || `<div class="assignment"><div><div class="assignment-name">No assignments</div></div></div>`}
             </div>
           </div>
 
@@ -324,8 +404,6 @@ function renderClassList(data) {
               <input id="hypo-date-${idx}" type="date" />
               <input id="hypo-score-${idx}" type="number" min="0" step="0.1" placeholder="Score" />
               <input id="hypo-outof-${idx}" type="number" min="0" step="0.1" placeholder="Out of" />
-            </div>
-            <div class="hypo-actions">
               <button class="btn btn-primary" onclick="addHypo(${idx})">Add hypothetical</button>
             </div>
           </div>
@@ -340,13 +418,11 @@ window.toggleDetails = (idx) => {
   const el = document.getElementById(`details-${idx}`);
   if (el) el.classList.toggle('hidden');
 };
-
 window.toggleHypoMode = (idx, checked) => {
   currentData.classes[idx].hypoMode = checked;
   renderStudentHeader(currentData);
   renderClassList(currentData);
 };
-
 window.addHypo = (idx) => {
   const name = document.getElementById(`hypo-name-${idx}`).value.trim() || 'Hypothetical Assignment';
   const category = document.getElementById(`hypo-cat-${idx}`).value || '';
@@ -358,21 +434,58 @@ window.addHypo = (idx) => {
     toast('Enter valid score and total points', 'error');
     return;
   }
-
   currentData.classes[idx].hypoAssignments.push({
-    name, category, dueDate: parseDate(dueDateRaw), score, outOf
+    name, category, dueDate: parseDate(dueDateRaw), score, outOf, graded: true, pct: (score/outOf)*100
   });
 
   renderStudentHeader(currentData);
   renderClassList(currentData);
-  // Keep details open and re-render it
   setTimeout(() => {
     const el = document.getElementById(`details-${idx}`);
     if (el && el.classList.contains('hidden')) el.classList.remove('hidden');
   }, 0);
-
-  toast('Hypothetical assignment added', 'success');
 };
+
+// Period change + refresh
+periodSelect.addEventListener('change', async () => {
+  currentPeriod = periodSelect.value;
+  await refetchPeriod();
+});
+refreshBtn.addEventListener('click', async () => {
+  await refetchPeriod();
+});
+
+async function refetchPeriod() {
+  if (!currentPeriod) return;
+  const studentNumber = studentNumberInput.value.trim();
+  const password = passwordInput.value;
+  const domain = domainInput.value.trim();
+  try {
+    setStatus('Refreshing…');
+    const xml = await fetchGradebook({ studentNumber, password, domain, reportPeriod: currentPeriod, childInt: childIntID });
+    const parsed = parseStudentVueXML(xml);
+    // Keep hypo state per class name if possible
+    if (currentData) {
+      for (const cls of parsed.classes) {
+        const prev = currentData.classes.find(c => c.name === cls.name);
+        if (prev) {
+          cls.hypoAssignments = prev.hypoAssignments || [];
+          cls.hypoMode = prev.hypoMode || false;
+        }
+      }
+    }
+    currentData = parsed;
+    renderStudentHeader(currentData);
+    renderPeriods(parsed.periods);
+    renderClassList(currentData);
+    setStatus('Refreshed');
+    toast('Grades refreshed', 'success');
+  } catch (err) {
+    console.error(err);
+    setStatus(err.message || 'Refresh failed');
+    toast(err.message || 'Refresh failed', 'error');
+  }
+}
 
 // ---------- Form handling ----------
 loginForm.addEventListener('submit', async (e) => {
@@ -396,14 +509,16 @@ loginForm.addEventListener('submit', async (e) => {
   setStatus('Authenticating with StudentVUE…');
 
   try {
-    const data = await fetchRealGrades({ studentNumber, password, domain });
-    currentData = data;
+    const xml = await fetchGradebook({ studentNumber, password, domain, reportPeriod: '', childInt: '0' });
+    const parsed = parseStudentVueXML(xml);
+    currentData = parsed;
     persistInputs();
-    setStatus(`Loaded grades for ${data.student.name} (${data.student.id || 'ID —'})`);
+    setStatus(`Loaded grades for ${parsed.student.name} (${parsed.student.id || 'ID —'})`);
     toast('Grades loaded successfully', 'success');
 
     studentHeader.classList.remove('hidden');
     renderStudentHeader(currentData);
+    renderPeriods(parsed.periods);
     renderClassList(currentData);
   } catch (err) {
     console.error(err);
